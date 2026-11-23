@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+pages-site/
+test-results/
+unit-results.xml
+.env
+.data/
+*.db
+*.db-shm
+*.db-wal
