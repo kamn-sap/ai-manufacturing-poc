@@ -43,7 +43,7 @@ flowchart LR
 | 領域 | 現在 | 実運用に必要な作業 |
 | --- | --- | --- |
 | 🧩 アプリ | React/Vite、Express API、SQS Worker | 実AWS構成、CDK Stack、環境分離 |
-| ☁️ AWS | ローカルはEmulator。CDK Foundation Stackはsynth/test可能 | 実AWSデプロイ、IAM最小権限、実行基盤、秘密情報、監視 |
+| ☁️ AWS | ローカルEmulator。CDK Foundation StackとDLQ alarmはsynth/test可能 | 実AWSデプロイ、IAM最小権限、実行基盤、秘密情報、通知先設定 |
 | 🔎 検索 | SQLite FTS5をローカルディスクに保存 | 複数インスタンスで共有できる検索基盤 |
 | 🗂️ データ | DynamoDB文書一覧でScan、文書・レビューは共有 | Query/GSI、ページネーション、権限キー |
 | 📨 キュー | SQS Worker、最大3回の再配信とDLQ | DLQ監視・再送、障害時の運用手順 |
@@ -66,7 +66,7 @@ flowchart LR
 4. Cognitoまたは既存IdPを比較し、ユーザー管理、MFA、ロール、共有ワークスペースの境界を決めます。
 5. 初期はLLM Mockを維持します。Ollamaは社内管理下の環境で、機密文書を外部へ送らずに品質・日本語性能・レイテンシ・必要メモリ・費用を評価します。
 6. 各AWSアカウント/リージョンでCDK Bootstrapを行い、GitHub ActionsからのCDKデプロイはOIDCを使います。長期アクセスキーを保存せず、承認、変更差分の確認、ロールバック手順を加えます。
-7. CloudWatchのログ・メトリクス・アラーム、AWS Budgets通知、障害対応、バックアップ復元確認を整えます。
+7. 実装済みのDLQ CloudWatch alarmに通知先を設定し、ログ・メトリクス、AWS Budgets、障害対応、バックアップ復元確認を整えます。Alarmと通知の料金も見積もります。
 
 **受入ゲート 🚦**: 認証・権限、費用、データ保護、復旧手順、監視、運用責任者を確認してから利用者を増やします。
 

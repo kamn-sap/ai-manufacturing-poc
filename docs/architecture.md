@@ -128,14 +128,14 @@ sequenceDiagram
 
 | 項目 | 方針 | 状態 |
 | --- | --- | --- |
-| ☁️ IaC | AWS CDK（TypeScript）でAWSリソースを定義し、CloudFormation経由で構築 | S3・4つのDynamoDB・SQSのFoundation Stackを実装。AWSデプロイは未実施 |
+| ☁️ IaC | AWS CDK（TypeScript）でAWSリソースを定義し、CloudFormation経由で構築 | S3・4つのDynamoDB・SQS/DLQ・DLQ CloudWatch alarmを実装。AWSデプロイは未実施 |
 | 🖥️ 実行基盤 | 単一EC2案とECS等を費用・運用要件で比較 | 未決。CDK採用とは独立して判断 |
 | 🔐 CI認証 | GitHub ActionsからAWS OIDCで一時認証 | 未実装。長期アクセスキーは使わない方針 |
 | 🧰 環境設定 | アプリ実行設定とインフラ構築設定を分離 | `.env.example`はローカル/アプリ実行用 |
 
 Foundation Stackは、非公開・暗号化したS3バケット、オンデマンド課金のDynamoDB 4テーブル、暗号化SQSキューを定義します。環境別のリソース名とCloudFormation outputsを生成し、アプリの`S3_BUCKET`、`*_TABLE_NAME`、`DOC_INGEST_QUEUE_URL`へ設定できます。データリソースはStack削除時に保持します。
 
-実行基盤を選ぶ前のため、VPC/セキュリティグループ、EC2またはECS、Cognito、アプリ用IAMロール、バックアップ、監視アラームはまだ含めていません。これらは実行基盤、IdP、RPO/RTO、予算の決定後にStackへ追加します。SQSには3回でDLQへ移すredrive policyを設定していますが、DLQ監視・再送手順は別途必要です。
+実行基盤を選ぶ前のため、VPC/セキュリティグループ、EC2またはECS、Cognito、アプリ用IAMロール、バックアップ、通知付き監視はまだ含めていません。これらは実行基盤、IdP、RPO/RTO、予算の決定後にStackへ追加します。SQSには3回でDLQへ移すredrive policyと、DLQにメッセージが1件以上ある場合のCloudWatch alarmを設定しています。AlarmはCloudWatch上で状態を示しますが、メール等への通知先と再送手順は未設定です。
 
 ```mermaid
 sequenceDiagram

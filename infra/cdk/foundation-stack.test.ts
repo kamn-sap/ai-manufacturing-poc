@@ -16,6 +16,7 @@ describe('FoundationStack', () => {
     template.resourceCountIs('AWS::S3::Bucket', 1);
     template.resourceCountIs('AWS::DynamoDB::Table', 4);
     template.resourceCountIs('AWS::SQS::Queue', 2);
+    template.resourceCountIs('AWS::CloudWatch::Alarm', 1);
     template.hasResourceProperties('AWS::DynamoDB::Table', {
       BillingMode: 'PAY_PER_REQUEST',
       KeySchema: [{ AttributeName: 'id', KeyType: 'HASH' }],
@@ -33,6 +34,17 @@ describe('FoundationStack', () => {
     template.hasResourceProperties('AWS::SQS::Queue', {
       QueueName: 'ai-mfg-poc-test-doc-ingest-dlq',
       MessageRetentionPeriod: 1209600,
+    });
+    template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+      AlarmName: 'ai-mfg-poc-test-doc-ingest-dlq-not-empty',
+      ComparisonOperator: 'GreaterThanOrEqualToThreshold',
+      DatapointsToAlarm: 1,
+      EvaluationPeriods: 1,
+      MetricName: 'ApproximateNumberOfMessagesVisible',
+      Namespace: 'AWS/SQS',
+      Statistic: 'Maximum',
+      Threshold: 1,
+      TreatMissingData: 'notBreaching',
     });
     template.hasResourceProperties('AWS::S3::Bucket', {
       PublicAccessBlockConfiguration: {

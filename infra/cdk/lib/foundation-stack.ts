@@ -13,6 +13,11 @@ import {
   TableEncryption,
 } from 'aws-cdk-lib/aws-dynamodb';
 import {
+  Alarm,
+  ComparisonOperator,
+  TreatMissingData,
+} from 'aws-cdk-lib/aws-cloudwatch';
+import {
   BlockPublicAccess,
   Bucket,
   BucketEncryption,
@@ -110,6 +115,20 @@ export class FoundationStack extends Stack {
       ...retained,
     });
 
+    const deadLetterQueueAlarm = new Alarm(this, 'DocumentIngestDeadLetterQueueAlarm', {
+      alarmName: `${resourcePrefix}-doc-ingest-dlq-not-empty`,
+      alarmDescription: 'One or more document ingestion messages require operator review.',
+      metric: documentIngestDeadLetterQueue.metricApproximateNumberOfMessagesVisible({
+        period: Duration.minutes(1),
+        statistic: 'Maximum',
+      }),
+      threshold: 1,
+      evaluationPeriods: 1,
+      datapointsToAlarm: 1,
+      comparisonOperator: ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+      treatMissingData: TreatMissingData.NOT_BREACHING,
+    });
+
     new CfnOutput(this, 'StageName', { value: stage });
     new CfnOutput(this, 'DocumentsBucketName', { value: documentsBucket.bucketName });
     new CfnOutput(this, 'UsersTableName', { value: usersTable.tableName });
@@ -119,6 +138,9 @@ export class FoundationStack extends Stack {
     new CfnOutput(this, 'DocumentIngestQueueUrl', { value: documentIngestQueue.queueUrl });
     new CfnOutput(this, 'DocumentIngestDeadLetterQueueUrl', {
       value: documentIngestDeadLetterQueue.queueUrl,
+    });
+    new CfnOutput(this, 'DocumentIngestDeadLetterQueueAlarmName', {
+      value: deadLetterQueueAlarm.alarmName,
     });
     new CfnOutput(this, 'AppOrigin', { value: appOrigin });
   }
