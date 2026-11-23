@@ -2,6 +2,7 @@ import 'dotenv/config';
 import {
   CreateTableCommand,
   DescribeTableCommand,
+  waitUntilTableExists,
 } from '@aws-sdk/client-dynamodb';
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { CreateBucketCommand, HeadBucketCommand, PutBucketCorsCommand } from '@aws-sdk/client-s3';
@@ -25,6 +26,12 @@ async function createTableIfMissing(TableName, KeySchema, AttributeDefinitions) 
     }));
     console.log(`Created DynamoDB table ${TableName}`);
   }
+  await waitUntilTableExists({
+    client: dynamo,
+    maxWaitTime: 60,
+    minDelay: 1,
+    maxDelay: 5,
+  }, { TableName });
 }
 
 async function main() {

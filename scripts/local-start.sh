@@ -16,7 +16,7 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
-NODE_MAJOR="$(node -p 'process.versions.node.split(\".\")[0]' 2>/dev/null || echo 0)"
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
 if (( NODE_MAJOR < 26 )); then
   echo "Node.js 26+ is required." >&2
   exit 1
@@ -48,18 +48,33 @@ trap cleanup EXIT INT TERM
 
 EMULATOR_CONFIG_DIR="${EMULATOR_DIR}/9297"
 echo "Waiting for the AWS Emulator..."
+EMULATOR_READY=false
 for _ in $(seq 1 60); do
   if [[ -f "${EMULATOR_CONFIG_DIR}/emulator_credentials" \
       && -f "${EMULATOR_CONFIG_DIR}/config" \
       && -f "${EMULATOR_CONFIG_DIR}/ca.pem" ]]; then
-    break
+    if AWS_CA_BUNDLE="${EMULATOR_CONFIG_DIR}/ca.pem" node -e '
+      const fs = require("node:fs");
+      const https = require("node:https");
+      const request = https.get(
+        "https://127.0.0.1:9297/__admin/health",
+        { ca: fs.readFileSync(process.env.AWS_CA_BUNDLE) },
+        (response) => {
+          response.resume();
+          process.exitCode = response.statusCode === 200 ? 0 : 1;
+        },
+      );
+      request.on("error", () => { process.exitCode = 1; });
+      request.setTimeout(1000, () => request.destroy());
+    ' 2>/dev/null; then
+      EMULATOR_READY=true
+      break
+    fi
   fi
   sleep 1
 done
 
-if [[ ! -f "${EMULATOR_CONFIG_DIR}/emulator_credentials" \
-    || ! -f "${EMULATOR_CONFIG_DIR}/config" \
-    || ! -f "${EMULATOR_CONFIG_DIR}/ca.pem" ]]; then
+if [[ "${EMULATOR_READY}" != true ]]; then
   echo "AWS Emulator did not become ready. Check container logs:" >&2
   docker logs "${CONTAINER_NAME}" >&2 || true
   exit 1
