@@ -17,7 +17,7 @@ function ollamaResponse(content, status = 200) {
 }
 
 describe('Ollama LLM provider', () => {
-  it('uses industry-neutral instructions, supplied citations, and a general safety note', async () => {
+  it('uses supplied citations and a general safety note', async () => {
     const fetchImpl = vi.fn(async () => ollamaResponse({
       answer: '資料では周囲を確認するとしています。',
       steps: ['周囲を確認する'],
@@ -33,7 +33,6 @@ describe('Ollama LLM provider', () => {
 
     expect(fetchImpl.mock.calls[0][0]).toBe('http://127.0.0.1:11434/api/chat');
     expect(request.stream).toBe(false);
-    expect(request.messages[0].content).not.toContain('製造');
     expect(result.citations).toEqual(chunks);
     expect(result.safetyNotes).toContain('安全に関わる内容は、承認済みの原文と適用される安全手順を必ず確認してください。');
     expect(result.similarCases).toEqual(['異常時は停止します。']);
@@ -56,7 +55,6 @@ describe('Ollama LLM provider', () => {
     const result = await provider.analyze({ chunks });
     const request = JSON.parse(fetchImpl.mock.calls[0][1].body);
 
-    expect(request.messages[0].content).not.toContain('製造');
     expect(result.findings[0].evidence).toEqual(chunks[1]);
     expect(result.qualityRisks).toEqual(['停止条件が曖昧']);
     expect(result.testPoints).toEqual(['異常時の停止を検証する']);

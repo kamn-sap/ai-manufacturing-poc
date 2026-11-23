@@ -1,57 +1,127 @@
-# AI Manufacturing PoC
+# 🤖 AI Manufacturing PoC
 
-作業現場向けの「AI作業標準書アシスタント」と「AI駆動設計レビュー支援」のPoCです。現状の機能・構成・ローカル実行・検証手順は [docs/architecture.md](./docs/architecture.md) を参照してください。
+作業現場の文書を登録し、根拠を確認しながら質問できるナレッジアシスタントと、設計レビューの指摘候補を作るPoCです。
 
-## 構成
+> 🧭 まず動かす: [`pnpm dev:local`](#-最短で起動)　|　🖥️ [操作マニュアル](./docs/user-manual.md)　|　🏗️ [アーキテクチャ](./docs/architecture.md)　|　🗺️ [実運用への移行計画](./docs/production-migration-plan.md)
 
-| パス | 内容 |
-| --- | --- |
-| `frontend/` | React/Viteの認証付き文書ライブラリ、ナレッジアシスタント、設計レビュー |
-| `backend/src/routes/` | JWT保護された文書・検索・レビューAPIと署名付きファイルURL |
-| `backend/src/services/` | TXT/Markdown/PDF/DOCX/XLSXの抽出、チャンク化、FTS5索引 |
-| `backend/src/workers/` | SQS long pollingによる非同期文書取り込み |
-| `backend/src/lib/` | AWS Emulator、ローカル/Cognito認証、SQLite FTS5、Mock/Ollama LLM provider |
-| `scripts/` | AWS EmulatorのDynamoDB/S3/SQSリソース初期化、ローカル起動 |
-| `docker/aws-emulator/` | ローカル開発用AWS Emulatorコンテナ |
-| `fixtures/` | E2Eで利用する機密情報を含まない作業標準書・FAQ・設計書 |
-| `e2e/` | 文書登録から根拠表示まで、設計レビュー、人の判断記録、複数ユーザーの独立ログインを検証するPlaywrightシナリオ |
-| `docs/` | アーキテクチャと運用・安全上の注意 |
-| `.github/workflows/` | 手動・アプリ変更時のUT/E2E/LintとGitHub Pagesレポート公開 |
+## 🎯 このPoCでできること
 
-## クイックスタート
+| やりたいこと | 使う画面 | できること |
+| --- | --- | --- |
+| 📚 手順書やFAQを登録する | 文書ライブラリ | ファイルを登録し、検索に使える状態を確認 |
+| 🔎 登録文書を根拠に質問する | ナレッジアシスタント | 回答と引用元を表示。根拠がなければ推測で補わない |
+| 🧪 設計文書を確認する | 設計レビュー | 指摘候補を提示し、人が採用・却下・修正を記録 |
 
-Node.js 26+、pnpm 12+、AWS Emulator互換endpointが必要です。
+### 🧩 システムの流れ
 
-```sh
-pnpm install
-cp .env.example .env
-# .envのJWT_SECRET、AUTH_PASSWORD、AWS_ENDPOINT_URLを設定
-pnpm aws:init
-pnpm dev
+```mermaid
+flowchart LR
+    U[👤 利用者] --> WEB[🖥️ React画面]
+    WEB --> API[🔐 Express API]
+    API --> S3[(🪣 S3)]
+    API --> Q[📨 SQS]
+    Q --> W[⚙️ 取り込みWorker]
+    W --> EX[📄 テキスト抽出・分割]
+    EX --> IDX[(🔎 SQLite FTS5)]
+    API --> IDX
+    API --> LLM[✨ Mock / Ollama]
+    API --> DDB[(🗂️ DynamoDB)]
 ```
 
-別ターミナルで `pnpm worker` を起動します。`AUTH_PROVIDER=local` の場合、`pnpm aws:init` は `.env` のユーザーをAWS EmulatorのDynamoDB `Users` テーブルへパスワードハッシュで登録します。初期開発ログインは `operator` / `change-me` です。実行前に必ず `.env` の認証情報を変更してください。Cognitoを使う場合は `AUTH_PROVIDER=cognito` とUser Pool/Client IDを設定し、ユーザーはCognito側で管理します。ユーザーごとのログインセッションは分離され、文書・レビューは共有ワークスペースとして利用します。
+### 💬 質問から回答まで
 
-### Dockerを使う簡易ローカル起動
+```mermaid
+sequenceDiagram
+    actor User as 👤 利用者
+    participant UI as 🖥️ 画面
+    participant API as 🔐 API
+    participant Search as 🔎 FTS5検索
+    participant Model as ✨ Mock / Ollama
+    User->>UI: 質問を入力
+    UI->>API: 質問を送信
+    API->>Search: 登録文書を検索
+    Search-->>API: 該当する文書チャンク
+    API->>Model: 質問と検索結果を渡す
+    Model-->>API: 回答案
+    API-->>UI: 回答 + 検索結果から作った引用
+    UI-->>User: 根拠を確認して判断
+```
 
-Docker DesktopまたはDocker Engine、Node.js 26+、pnpm 12+があれば、AWS Emulatorも含めて一つのコマンドで起動できます。
+## 🚀 最短で起動
+
+### 必要なもの
+
+| 🧰 必要なもの | 用途 |
+| --- | --- |
+| Node.js 26以上、pnpm 12以上 | アプリとWorkerの実行 |
+| Docker DesktopまたはDocker Engine | ローカルAWS Emulatorの実行 |
+| 空いているポート `9297`、`3000`、`5173` | Emulator、API、画面 |
+
+### 起動手順
 
 ```sh
 pnpm dev:local
 ```
 
-このコマンドは、初回のみ `.env` を作成し、依存関係をセットアップし、AWS Emulatorコンテナを起動し、リソース初期化後に画面・API・workerを起動します。ブラウザーでは <http://localhost:5173> を開きます。終了時はターミナルで `Ctrl+C` を押すと、アプリとEmulatorコンテナを停止します。
+1. 初回は `.env.example` をもとに `.env` と依存関係を準備します。
+2. DockerでAWS Emulatorを起動し、DynamoDB・S3・SQSを初期化します。
+3. API、画面、文書取り込みWorkerが起動したら <http://localhost:5173> を開きます。
+4. 初期ログインは `operator` / `change-me` です。ローカル開発専用の値なので、共有環境や公開環境では必ず変更してください。
+5. 終了するときは起動中のターミナルで `Ctrl+C` を押します。
 
-初回は `.env.example` から作成された `.env` の開発用認証情報を確認してください。AWS EmulatorのDynamoDB/S3/SQSリソースはメモリ上にあり、停止すると消去されます。Emulatorが生成するcredential/config/CAファイルは `~/.aws/emulator/` に保存されます。ローカル開発用途に限り、実AWSの認証情報は使用しません。
+> 💡 既定値は `AUTH_PROVIDER=local`、`LLM_PROVIDER=mock` です。EmulatorのDynamoDB/S3/SQSはメモリ上にあるため、停止するとデータが消えます。実AWSの認証情報はローカル起動に使いません。
 
-## チェック
+### 🛠️ 手動で起動する場合
 
 ```sh
-pnpm test
-pnpm lint
-pnpm test:e2e
+pnpm install
+cp .env.example .env
+# .env の認証情報・AWS Emulator接続先を確認
+pnpm aws:init
+pnpm dev
 ```
 
-ベクトル検索、OCR、動画・図面解析、Bedrock等の外部推論サービスは含みません。`LLM_PROVIDER=ollama` を指定すると、loopback/private IP上のOllamaを利用できます（既定値はMock）。AI出力は参考情報であり、安全作業は承認済み原文の確認、設計指摘は担当者による採否が必要です。
+別ターミナルで `pnpm worker` を起動します。AWS Emulatorのcredential・config・CAファイルの設定や、実AWSを使う場合の注意は[アーキテクチャ資料](./docs/architecture.md#ローカル起動とデータの扱い)を参照してください。
 
-GitHub Actionsは手動実行、またはアプリ関連ファイルのpush/PRで検証を実行します。default branchでは成功・失敗を含む検証結果をGitHub Pagesに公開し、E2Eレポート内で各テストの録画動画を参照できます。PR等のdefault branch以外の実行結果はActions artifactから確認できます。Pagesの公開先はリポジトリ設定でGitHub Actionsを有効にしてください。
+## 🧭 画面の使い方
+
+| 順番 | 画面 | 操作 |
+| --- | --- | --- |
+| 1️⃣ | 文書ライブラリ | TXT / Markdown / PDF / DOCX / XLSXを登録し、「利用可能」になるまで待つ |
+| 2️⃣ | ナレッジアシスタント | 質問し、回答と引用元の文書・箇所を確認する |
+| 3️⃣ | 設計レビュー | 種別が「設計書」の文書を選び、候補ごとに人が判断する |
+
+詳しい画面画像付きの手順は[操作マニュアル](./docs/user-manual.md)をご覧ください。
+
+## ⚙️ 接続先の選び方
+
+| 設定 | 既定値 | 切り替え先 | 注意点 |
+| --- | --- | --- | --- |
+| `AUTH_PROVIDER` | `local` | `cognito` | CognitoではUser Pool等の設定とユーザー登録が必要。MFA等の追加チャレンジは現在のログイン画面では完了できません |
+| `LLM_PROVIDER` | `mock` | `ollama` | Ollamaはloopback/private IPに限定。モデル品質、応答時間、必要メモリを事前評価してください |
+| 検索 | SQLite FTS5 | 現状、設定切替なし | 検索Providerの差し替えには別実装とデータ移行が必要 |
+| 保存・キュー | AWS SDK | `AWS_ENDPOINT_URL`等で接続先選択 | Emulatorと実AWSの切替は可能ですが、本番用IaC・IAM・環境分離は別途必要 |
+
+🌱 Provider境界は、PoCの接続先を選びやすくするためのものです。すべての基盤を設定値だけで他製品へ交換できる、という意味ではありません。詳細は[アーキテクチャ資料](./docs/architecture.md#providerと外部サービス)を参照してください。
+
+☁️ AWSインフラのIaCには **AWS CDK（TypeScriptを想定）** を採用する方針です。CDKコードやAWSデプロイはまだ実装していません。`.env.example` はアプリ実行時の接続設定であり、CDKのデプロイ用認証情報は含めません。
+
+## ✅ チェックとCI
+
+| コマンド | 確認内容 |
+| --- | --- |
+| `pnpm test` | API、認証、検索、取り込み、LLMのユニットテスト |
+| `pnpm lint` | Backend、Frontend、スクリプト、E2Eの静的検査 |
+| `pnpm test:e2e` | 画面操作のE2Eテスト（外部サービスはテスト用スタブ） |
+
+GitHub Actionsはテスト・lint・E2Eを実行しますが、AWSへはデプロイしません。将来のCDKデプロイではAWS OIDC、環境承認、変更確認、ロールバック等を整備します。
+
+## ⚠️ 対象範囲と安全上の注意
+
+- このPoCは全文検索（SQLite FTS5）を使います。ベクトル検索、OCR、動画文字起こし、図面解析は行いません。
+- 対応ファイルはTXT、Markdown、PDF、DOCX、XLSXです。画像だけのPDF等、文字を抽出できない資料は別途確認が必要です。
+- 既定のMockは再現可能なテスト用応答です。Ollama利用時も、出力の品質や正確性を保証するものではありません。
+- AI回答は参考情報です。安全作業は承認済みの最新版文書と現場の手順を確認してください。設計の最終判断は担当者が行ってください。
+- 現在の文書・レビュー領域は共有ワークスペースです。ログインを分けても、文書ごとの権限分離は行われません。
+
+📖 構成の詳細、データの流れ、制約は[アーキテクチャ資料](./docs/architecture.md)、実運用へ移るための課題と段階案は[移行計画](./docs/production-migration-plan.md)を参照してください。

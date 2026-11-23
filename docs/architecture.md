@@ -1,80 +1,216 @@
-# PoC 構成と機能
+# 🏗️ PoCの構成とデータの流れ
 
-## 構成
+この資料では、利用者の操作が画面から保存・検索・AI応答までどう届くかを説明します。現在の構成と、本番化に向けてまだ必要なものを分けて記載しています。
 
-| 領域 | 技術・用途 |
-| --- | --- |
-| Frontend | React 19、Vite、React Router。文書ライブラリ、ナレッジアシスタント、設計レビュー |
-| API / Worker | Express 5、JWT保護API、SQS long polling worker |
-| オブジェクト | AWS Emulator上のS3。署名付きPUT/GET URL |
-| メタデータ・認証 | AWS Emulator上のDynamoDB（Documents、ReviewSessions、ReviewFindings。ローカル認証時のみUsers）またはAmazon Cognito User Pool |
-| 全文検索 | SQLite FTS5 trigram tokenizer。ベクトル検索は行わない |
-| 回答生成 | `LLM_PROVIDER=mock`（決定的テンプレート）または `ollama`（loopback/private IP上のOllama）。外部推論サービスへの接続は対象外 |
+## 🧭 全体像
 
-Providerの選択は起動時の環境設定で行い、LLMと認証は小さなProvider factoryを使います。検索は`createSearchProvider(database)`で索引DBを注入できます。保存/キューはAWS SDKを使い、`AWS_REGION`、`AWS_ENDPOINT_URL`、各AWSリソース設定でEmulatorまたは実AWSを選択します。現時点で検索ProviderはSQLite、保存/キューProviderはAWSのみです。別製品への入れ替えには対応実装とデータ移行が必要で、設定値だけで切り替わるわけではありません。
+```mermaid
+flowchart LR
+    U[👤 利用者] -->|HTTPS / JWT| FE[🖥️ React 19 + Vite]
+    FE -->|REST API| API[🔐 Express 5]
+    API -->|認証| AUTH[🪪 Local JWT / Cognito]
+    API -->|文書・レビュー情報| DDB[(🗂️ DynamoDB)]
+    FE -->|署名付きPUT| S3[(🪣 S3)]
+    API -->|取り込み依頼| SQS[📨 SQS]
+    SQS --> WORKER[⚙️ Node.js Worker]
+    WORKER -->|ダウンロード| S3
+    WORKER --> EXTRACT[📄 抽出・チャンク化]
+    EXTRACT --> FTS[(🔎 SQLite FTS5)]
+    API -->|検索| FTS
+    API -->|検索結果 + 質問| LLM[✨ Mock / Ollama]
+    API -->|回答 + 引用| FE
+```
 
-AWS Emulatorの導入・利用方法は[Emulator GitHub](https://github.com/aws/aws-emulator)と[AWS Emulatorドキュメント](https://docs.aws.amazon.com/ja_jp/emulator/)を参照してください。
+### 🧱 コンポーネント一覧
 
-## 文書登録と検索
+| 部品 | 主な役割 | 現在の実装 |
+| --- | --- | --- |
+| 🖥️ Frontend | ログイン、文書登録、質問、レビュー | React 19、Vite、React Router |
+| 🔐 API | JWT認証、文書・検索・レビューのAPI | Express 5 |
+| ⚙️ Worker | SQSから取り込み依頼を読み、文書を索引化 | Node.js long polling |
+| 🪣 オブジェクト保存 | 元文書の保存・取得 | S3と短時間の署名付きURL |
+| 🗂️ メタデータ | 文書、レビュー、ローカル利用者 | DynamoDB |
+| 🔎 全文検索 | 文書チャンクの検索 | SQLite FTS5、trigram tokenizer |
+| ✨ 回答・レビュー生成 | 検索結果を使った回答や指摘候補 | 決定的Mock、またはOllama adapter |
 
-ログイン後、文書ライブラリでTXT、Markdown、PDF、DOCX、XLSXを選びます。APIが短時間有効のS3署名付きURLを払い出し、ブラウザーが直接アップロードします。登録完了後に `doc-ingest-queue` へメッセージを送り、workerがテキストを抽出してチャンク化し、SQLite FTS5へ登録します。取り込み状態はDynamoDBで管理します。
+## 📥 文書登録から検索可能になるまで
 
-ナレッジアシスタントはFTS5の検索ヒットだけを根拠に回答と引用元を表示します。ヒットがない場合は資料を確認できない旨を返し、推測で補完しません。質問への評価はSQLiteに記録します。
+```mermaid
+sequenceDiagram
+    actor User as 👤 利用者
+    participant UI as 🖥️ 文書ライブラリ
+    participant API as 🔐 API
+    participant DDB as 🗂️ DynamoDB
+    participant S3 as 🪣 S3
+    participant SQS as 📨 SQS
+    participant Worker as ⚙️ Worker
+    participant FTS as 🔎 SQLite FTS5
+    User->>UI: 種別を選びファイルを登録
+    UI->>API: ファイル名・種別を送信
+    API->>DDB: uploading状態の文書を作成
+    API-->>UI: 署名付きアップロードURL
+    UI->>S3: ファイルをアップロード
+    UI->>API: アップロード完了を通知
+    API->>SQS: 取り込み依頼を送信
+    SQS-->>Worker: メッセージを配信
+    Worker->>S3: 元文書を取得
+    Worker->>Worker: テキスト抽出・分割
+    Worker->>FTS: 検索用チャンクを登録
+    Worker->>DDB: ready状態へ更新
+    UI->>API: 文書状態を定期確認
+    API-->>UI: 利用可能
+```
 
-## ログインとユーザー登録
+- ✅ 文書一覧で状態が「利用可能」になってから質問や設計レビューに使えます。
+- ⚠️ 現状のWorkerには、本番で必要な失敗時再試行・DLQ・冪等性の整備が残っています。
 
-`AUTH_PROVIDER=local`（既定）ではログインAPIがDynamoDB `Users` テーブルのscryptハッシュを照合し、ローカルJWTを発行します。`pnpm aws:init` は `.env` の `AUTH_USERNAME` / `AUTH_PASSWORD`、または `AUTH_USERS_JSON` を登録します。
+ローカルEmulatorはS3のCORS応答を返さないため、署名付きURLをViteの同一オリジンproxy経由で利用します。実AWSでは署名付きURLをS3へ直接送信し、bucket CORSで画面のoriginを許可します。
 
-`AUTH_PROVIDER=cognito` ではAmazon Cognito User Poolの `USER_PASSWORD_AUTH` を使い、APIがID tokenを検証します。`COGNITO_REGION`、`COGNITO_USER_POOL_ID`、`COGNITO_CLIENT_ID` を設定し、Cognitoアプリクライアントでこの認証フローを有効にしてください。ユーザーはCognito側で作成・管理し、`pnpm aws:init` はDynamoDB `Users` を作成・seedしません。MFA等の追加チャレンジを返すアプリクライアントは現行ログイン画面では完了できず、追加認証が必要な旨を返します。これは試し運用向けの接続であり、公開運用前にMFA/Hosted UI、アカウント復旧、レート制限、監査要件を決めてください。
+## 💬 質問と根拠表示
 
-いずれの認証Providerでも各ユーザーのログイン状態はブラウザーごとに独立しますが、現状の文書・レビュー領域は共有ワークスペースです。Cognitoを導入しても文書単位の権限分離が自動で追加されるわけではありません。
+```mermaid
+sequenceDiagram
+    actor User as 👤 利用者
+    participant UI as 🖥️ ナレッジアシスタント
+    participant API as 🔐 API
+    participant FTS as 🔎 SQLite FTS5
+    participant LLM as ✨ Mock / Ollama
+    User->>UI: 質問を入力
+    UI->>API: JWT付きで質問
+    API->>FTS: 関連する文書チャンクを検索
+    FTS-->>API: 検索結果（なければ空）
+    API->>LLM: 質問と検索結果を渡す
+    LLM-->>API: 回答案
+    API->>API: 引用を検索結果内の文書に限定
+    API-->>UI: 回答・手順・注意・引用元
+    UI-->>User: 原文を確認し、参考情報として利用
+```
 
-## 設計レビュー
+引用元は検索結果から選びます。LLMに引用位置を自由生成させません。該当資料がない場合は根拠なしとして扱い、推測回答を補完しません。回答への評価はSQLiteに保存されます。
 
-レビュー対象は取り込み済み文書です。Mock AIが確認観点、指摘候補、品質リスク、テスト観点、根拠箇所を返します。生成結果は常に候補状態で保存し、担当者が採用・却下・修正を記録するまでは確定指摘として扱いません。
+## 🧪 設計レビューと人の判断
 
-## ローカルLLM
+```mermaid
+sequenceDiagram
+    actor Reviewer as 👤 担当者
+    participant UI as 🖥️ 設計レビュー
+    participant API as 🔐 API
+    participant FTS as 🔎 SQLite FTS5
+    participant LLM as ✨ Mock / Ollama
+    participant DDB as 🗂️ DynamoDB
+    Reviewer->>UI: 取り込み済み設計書を選択
+    UI->>API: レビュー開始
+    API->>FTS: 文書の内容を取得
+    API->>LLM: 設計内容を渡し観点を生成
+    LLM-->>API: 指摘候補・リスク・テスト観点
+    API->>DDB: 候補を未確認として保存
+    API-->>UI: 候補と根拠を表示
+    Reviewer->>UI: 採用・却下・修正を選ぶ
+    UI->>API: 人の判断を記録
+    API->>DDB: 判断結果を更新
+```
 
-試し運用では `LLM_PROVIDER=ollama` を指定し、`OLLAMA_BASE_URL` と `OLLAMA_MODEL` でOllamaを選択します。既定URLは `http://127.0.0.1:11434` です。Ollamaは同じEC2上、またはプライベートネットワーク内で実行し、インターネットへ公開しないでください。公開ホスト名を指定した場合は設定エラーになります。モデル出力の引用箇所は生成させず、検索で取得した文書チャンクだけを引用として返します。モデルの品質・応答時間・必要メモリ・費用は実文書を外部へ送らない評価環境で確認してください。
+🚦 生成結果は常に候補です。根拠と設計要求を確認した担当者が採否を決め、最終承認を行います。
 
-`LLM_PROVIDER=mock` は従来どおり既定値です。Ollamaを選択する場合、指定モデルを事前に取得し、`OLLAMA_TIMEOUT_MS` でリクエスト上限時間を設定します。
+## 🔌 Providerと外部サービス
 
-## ローカル起動
+| 領域 | 設定・境界 | 選択できるもの | まだできないこと |
+| --- | --- | --- | --- |
+| 🪪 認証 | `AUTH_PROVIDER` | `local` / `cognito` | Cognito MFA等の追加challengeを現在の画面で完了する |
+| ✨ LLM | `LLM_PROVIDER` | `mock` / `ollama` | Copilot CLIを利用者向け推論APIとして使う、Bedrockへ切り替える |
+| 🔎 検索 | `createSearchProvider(database)` | SQLite FTS5のDB注入 | 設定値だけで検索エンジンを別製品へ切替 |
+| 🗂️ 保存・キュー | AWS SDK設定 | Emulator / 実AWSの接続先 | 保存基盤全体の抽象化や自動データ移行 |
 
-Docker DesktopまたはDocker Engine、Node.js 26+、pnpm 12+が利用できる場合は、次の簡易起動を推奨します。
+## 🏗️ AWS構築とデプロイ方針
+
+| 項目 | 方針 | 状態 |
+| --- | --- | --- |
+| ☁️ IaC | AWS CDK（TypeScriptを想定）でAWSリソースを定義し、CloudFormation経由で構築 | 採用決定。CDKコードは未実装 |
+| 🖥️ 実行基盤 | 単一EC2案とECS等を費用・運用要件で比較 | 未決。CDK採用とは独立して判断 |
+| 🔐 CI認証 | GitHub ActionsからAWS OIDCで一時認証 | 未実装。長期アクセスキーは使わない方針 |
+| 🧰 環境設定 | アプリ実行設定とインフラ構築設定を分離 | `.env.example`はローカル/アプリ実行用 |
+
+CDKで管理するAWSリソースの範囲は、実行基盤の決定後に確定します。候補にはVPC/セキュリティグループ、EC2またはECS、S3、DynamoDB、SQS/DLQ、Cognito、IAM、Secrets Manager、CloudWatchがあります。無料枠・月額目標との整合を確認してから構成を固めます。
+
+```mermaid
+sequenceDiagram
+    actor Dev as 👩‍💻 開発者
+    participant Actions as 🚀 GitHub Actions
+    participant OIDC as 🔐 AWS OIDC
+    participant CDK as 🏗️ CDK CLI
+    participant CFN as ☁️ CloudFormation
+    Dev->>Actions: 承認済み変更をデプロイ
+    Actions->>OIDC: 一時認証を要求
+    OIDC-->>Actions: 一時的なAWS認証情報
+    Actions->>CDK: cdk synth / cdk deploy
+    CDK->>CFN: 変更セットを適用
+    CFN-->>Actions: デプロイ結果
+```
+
+上図は今後整備するデプロイ方式です。現行のGitHub Actionsはテスト・lint・E2Eのみで、CDK Bootstrap、AWS OIDCロール、CDKデプロイはいずれも未実装です。AWSアカウント/リージョンごとのBootstrap、最小権限、承認、変更差分の確認、ロールバックを設計します。
+
+`.env.example`の`AWS_REGION`や`AWS_ENDPOINT_URL`はアプリがAWS SDKで接続するための実行時設定です。ローカル既定リージョンは`us-east-1`、endpointはローカルEmulatorです。計画中の東京リージョン向けCDK設定やAWSデプロイ資格情報をここへ追加しません。
+
+### 🪪 認証
+
+- `AUTH_PROVIDER=local` はDynamoDB `Users` のscryptハッシュを照合し、ローカルJWTを発行します。初期ユーザー設定は `.env` の `AUTH_USERNAME` / `AUTH_PASSWORD`、または `AUTH_USERS_JSON` です。
+- `AUTH_PROVIDER=cognito` はCognito `USER_PASSWORD_AUTH` を使い、APIがID tokenを検証します。`COGNITO_REGION`、`COGNITO_USER_POOL_ID`、`COGNITO_CLIENT_ID` とアプリクライアント設定が必要です。
+- Cognitoのユーザー登録・MFA・アカウント復旧の運用は別途整備が必要です。現行画面は追加認証challengeを完了できません。
+- ログインセッションは利用者ごとに分離されますが、文書・レビューは共有ワークスペースです。文書単位の認可はありません。
+
+### ✨ LLM
+
+- `mock` は決定的なテンプレート出力で、既定の開発・テスト設定です。
+- `ollama` は `OLLAMA_BASE_URL`、`OLLAMA_MODEL`、`OLLAMA_TIMEOUT_MS` で設定します。接続先はloopback/private IPに限定され、外部ホスト名は拒否されます。
+- モデルに引用を自由生成させず、検索で取得したチャンクに引用範囲を固定します。
+- 実モデルの品質、日本語性能、応答時間、必要メモリ、同時実行時の費用は未検証です。文書を外部へ送らない評価環境で確認してください。
+
+## 💾 データと永続性
+
+| データ | 保存場所 | ローカルPoCでの注意 |
+| --- | --- | --- |
+| 元文書 | S3 | AWS Emulatorではメモリ上。停止で消去 |
+| 文書・レビュー情報 | DynamoDB | AWS Emulatorではメモリ上。停止で消去 |
+| 取り込み依頼 | SQS | AWS Emulatorではメモリ上。停止で消去 |
+| 検索チャンク・評価 | SQLite (`SQLITE_PATH`) | ディスク上のDB。単一ローカル環境向け |
+| Emulatorのcredential/config/CA | `~/.aws/emulator/` | Emulator停止後もファイルが残る |
+
+🔒 実AWSでの本番運用には、アカウント/環境分離、IAM最小権限、秘密情報管理、暗号化、バックアップ、復元検証、ネットワーク境界、監査と監視が必要です。
+
+## 🧰 ローカル起動とデータの扱い
+
+### 簡易起動
 
 ```sh
 pnpm dev:local
 ```
 
-`pnpm dev:local` はDockerでAWS Emulatorを起動し、ホスト側で依存関係確認・リソース初期化・画面/API/worker起動を行います。終了時は `Ctrl+C` でEmulatorコンテナも停止します。
+Node.js 26以上、pnpm 12以上、Dockerが必要です。スクリプトはAWS EmulatorのHTTPS readinessを確認し、DynamoDB・S3・SQSを初期化した後に画面、API、Workerを起動します。ブラウザーは <http://localhost:5173>、APIはport `3000`、Emulatorは `9297` を使用します。終了はターミナルで `Ctrl+C` です。
 
-初回起動では `.env.example` から `.env` を作成します。開発用の認証情報を確認し、ローカル開発以外では使用しないでください。AWS EmulatorのDynamoDB/S3/SQSリソースはメモリ上にあり、コンテナ停止時に消去されます。Emulatorが生成するcredential/config/CAファイルは `~/.aws/emulator/` に残ります。
+### 初期ユーザーとEmulator
 
-手動で起動する場合は次の手順を使います。
+- `.env.example` から作られた既定ユーザーは `operator` / `change-me` です。ローカル開発専用であり、公開環境では使わないでください。
+- EmulatorのDynamoDB/S3/SQSはコンテナ停止で消去されます。SQLite DBは `.data/manufacturing.db` に保存されます。
+- 9297番portが使用中なら競合元を確認して停止するか、Emulatorのport設定を変更してください。
+- Linuxで署名付きURLやAPIがTLSエラーになる場合は、Emulatorが生成したCA bundleをSDK環境変数に設定し、ブラウザー側でもCA証明書を信頼させる必要があります。
+- このPoCのローカル起動には実AWSのアクセスキーを設定しないでください。
 
-1. Node.js 26+ と pnpm 12+、AWS Emulatorを用意します。Linux/Docker起動時の既定endpointは `https://127.0.0.1:9297` です。
-2. Emulatorが生成するcredential/config/CAファイルのパスを確認し、`.env.example` を `.env` にコピーして `AWS_SHARED_CREDENTIALS_FILE`、`AWS_CONFIG_FILE`、`AWS_CA_BUNDLE` を設定します。SDKが証明書を信頼するようCA bundleを読み込みます。実AWSの `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_SESSION_TOKEN`、`AWS_PROFILE` が環境に設定されている場合は外してください。ブラウザーから署名付きURLを使う場合は、EmulatorのCA証明書をOS/ブラウザー側でも信頼させてください。JWT secretとログインパスワードも必ず変更してください。
-3. 依存関係をインストールし、`pnpm aws:init` でAWSリソースを初期化します。
-4. `pnpm dev` でAPI/画面を起動し、別ターミナルで `pnpm worker` を起動します。
-5. `.env` のユーザー名とパスワードでログインします。初期値は開発用のみ `operator` / `change-me` です。
+## ✅ 検証とCI
 
-このPoCはS3、DynamoDB、SQSのサービスを自身では起動しません。AWS Emulatorの起動方法とSDK設定は[公式Getting Started](https://docs.aws.amazon.com/emulator/latest/userguide/getting-started.html)および[SDK接続手順](https://docs.aws.amazon.com/emulator/latest/userguide/point-sdk-to-emulator.html)を参照してください。EmulatorはAWSサービスへ接続せず、SDKの既定endpointもEmulatorに向けています。
+| 検証 | コマンド | 内容 |
+| --- | --- | --- |
+| 🧪 Unit/API | `pnpm test` | 認証、取り込み、全文検索、LLM Providerなど |
+| 🧹 静的検査 | `pnpm lint` | Backend、Frontend、スクリプト、E2E |
+| 🖱️ UI E2E | `pnpm test:e2e` | ログイン、登録、根拠表示、設計レビュー、人の判断 |
 
-## 検証
+GitHub Actionsは手動実行、アプリ関連ファイルの変更時にテスト・lint・E2Eを行います。**AWSへのデプロイは行いません。** default branchのレポート公開にはGitHub Pagesを使います。実AWSへのCI/CDにはAWS OIDC、環境承認、デプロイ・ロールバック手順が別途必要です。
 
-- `pnpm test`: 取り込み分割、FTS検索、Mock LLM、認証境界のユニット/APIテスト
-- `pnpm lint`: backend、frontend、スクリプト、E2Eの静的検査
-- `pnpm test:e2e`: Playwrightでログイン、複数ユーザーの独立セッション、文書アップロードから根拠表示まで、レビュー候補の人手判断を検証（外部APIは決定的なテストダブル）
+## 🚧 現在の制約
 
-E2E用Mockは文書ストレージやLLMの挙動をネットワークへ接続せず再現します。AWS Emulatorとの実接続確認は `pnpm aws:init` とworkerを使う実行環境で行います。
+- SQLite FTS5はローカルディスク上にあり、複数API/Worker間で共有できません。水平スケール前に共有検索基盤への移行が必要です。
+- 文書一覧などのDynamoDBアクセスは本番向けの容量・アクセスパターン最適化が未完了です。
+- SQS処理の再試行、DLQ、冪等性、障害時の運用は本番品質ではありません。
+- OCR、動画・図面解析、ベクトル検索、複雑な承認フローは対象外です。
+- AI出力は正確性や安全性を保証しません。安全作業は承認済み原文を確認し、設計判断は担当者が行ってください。
 
-## GitHub Actions / Pages
-
-`.github/workflows/app-validation.yml` は `workflow_dispatch`、アプリ関連ファイルのpush、対象PRでユニットテスト・lint・Playwright E2Eを実行します。default branchの実行では、結果ダッシュボードとPlaywright HTML reportをGitHub Pagesへデプロイします。E2Eレポートには全テストの録画動画を添付し、テストごとの詳細画面から再生できます。その他のブランチ/PRでは同じレポートをActions artifact（30日保持）として保存します。
-
-GitHubリポジトリの **Settings → Pages → Build and deployment → Source** を **GitHub Actions** に設定してください。失敗した検証でもレポートを公開してからworkflowを失敗扱いにします。
-
-## 対象外と安全上の注意
-
-OCR、動画文字起こし、図面解析、ベクトル検索、Bedrock等の外部推論サービス、複雑な承認フローは対象外です。AIの出力は参考情報です。安全に関わる作業は承認済みの原文と現場の安全手順を確認し、設計の最終判断は人が行ってください。
+📖 次に読む: [画面付き操作マニュアル](./user-manual.md) · [実運用への移行計画](./production-migration-plan.md)
