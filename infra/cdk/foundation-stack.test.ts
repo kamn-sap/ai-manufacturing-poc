@@ -1,5 +1,5 @@
 import { App } from 'aws-cdk-lib';
-import { Template } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { describe, expect, it } from 'vitest';
 import { FoundationStack } from './lib/foundation-stack.js';
 
@@ -15,7 +15,7 @@ describe('FoundationStack', () => {
 
     template.resourceCountIs('AWS::S3::Bucket', 1);
     template.resourceCountIs('AWS::DynamoDB::Table', 4);
-    template.resourceCountIs('AWS::SQS::Queue', 1);
+    template.resourceCountIs('AWS::SQS::Queue', 2);
     template.hasResourceProperties('AWS::DynamoDB::Table', {
       BillingMode: 'PAY_PER_REQUEST',
       KeySchema: [{ AttributeName: 'id', KeyType: 'HASH' }],
@@ -25,6 +25,14 @@ describe('FoundationStack', () => {
       QueueName: 'ai-mfg-poc-test-doc-ingest',
       ReceiveMessageWaitTimeSeconds: 20,
       VisibilityTimeout: 120,
+      RedrivePolicy: {
+        deadLetterTargetArn: Match.anyValue(),
+        maxReceiveCount: 3,
+      },
+    });
+    template.hasResourceProperties('AWS::SQS::Queue', {
+      QueueName: 'ai-mfg-poc-test-doc-ingest-dlq',
+      MessageRetentionPeriod: 1209600,
     });
     template.hasResourceProperties('AWS::S3::Bucket', {
       PublicAccessBlockConfiguration: {

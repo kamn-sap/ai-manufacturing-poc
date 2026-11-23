@@ -20,8 +20,8 @@ pnpm exec cdk synth -c stage=staging -c appOrigin=https://app.example.com
 
 No AWS account is required for the local checks. Deployment requires an AWS account, a reviewed cost/security design, a configured profile or GitHub Actions OIDC role, and CDK bootstrap in the target account and region. Production must use an HTTPS `appOrigin`.
 
-The stack outputs the bucket, table names, and queue URL. Configure the application with those outputs using `S3_BUCKET`, `*_TABLE_NAME`, and `DOC_INGEST_QUEUE_URL`. Omit `AWS_ENDPOINT_URL` in AWS so the SDK uses regional AWS endpoints; local Emulator runs continue to set the endpoint explicitly.
+The stack outputs the bucket, table names, primary queue URL, and DLQ URL. Configure the application with those outputs using `S3_BUCKET`, `*_TABLE_NAME`, and `DOC_INGEST_QUEUE_URL`. Omit `AWS_ENDPOINT_URL` in AWS so the SDK uses regional AWS endpoints; local Emulator runs continue to set the endpoint explicitly.
 
 `pnpm aws:init` is the local Emulator initializer, not a production deployment step. CDK owns resource creation in AWS. Do not copy the local `.env` to a deployed environment; supply the CDK outputs and the runtime role's AWS region/credentials through the selected deployment platform.
 
-The stack does not yet create compute, VPC/security groups, Cognito, application IAM roles, DLQ/retry behavior, backups, or monitoring alarms. Those depend on the execution-platform choice, authentication decision, and recovery/cost requirements. Do not deploy until these missing components, IAM permissions, costs, and operational requirements have been reviewed.
+The stack does not yet create compute, VPC/security groups, Cognito, application IAM roles, backups, or monitoring alarms. The ingestion queue moves messages to its DLQ after three receives, but DLQ alerting and replay procedures are not configured. These remaining components depend on the execution-platform choice, authentication decision, and recovery/cost requirements. Do not deploy until they, IAM permissions, costs, and operational requirements have been reviewed.

@@ -10,30 +10,53 @@ async function queueUrl() {
   return result.QueueUrl;
 }
 
-async function processMessage(message) {
-  const { documentId } = JSON.parse(message.Body);
-  let document;
-  try {
-    document = await getDocument(documentId);
-    if (!document) throw new Error(`Document ${documentId} does not exist`);
-    await updateDocument(documentId, { status: 'processing', updatedAt: new Date().toISOString() });
-    const result = await ingestDocument(document);
-    await updateDocument(documentId, {
-      status: 'ready',
-      chunkCount: result.chunkCount,
-      ingestedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.error(`Document ingestion failed for ${documentId}:`, error);
-    if (document) {
-      await updateDocument(documentId, {
-        status: 'failed',
-        error: error.message,
+function createMessageProcessor({
+  getDocumentFn = getDocument,
+  updateDocumentFn = updateDocument,
+  ingestDocumentFn = ingestDocument,
+} = {}) {
+  return async function processMessage(message) {
+    const { documentId } = JSON.parse(message.Body);
+    let document;
+    try {
+      document = await getDocumentFn(documentId);
+      if (!document) throw new Error(`Document ${documentId} does not exist`);
+      await updateDocumentFn(documentId, { status: 'processing', updatedAt: new Date().toISOString() });
+      const result = await ingestDocumentFn(document);
+      await updateDocumentFn(documentId, {
+        status: 'ready',
+        chunkCount: result.chunkCount,
+        ingestedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
+    } catch (error) {
+      if (document) {
+        try {
+          await updateDocumentFn(documentId, {
+            status: 'failed',
+            error: error.message,
+            updatedAt: new Date().toISOString(),
+          });
+        } catch (stateError) {
+          console.error(`Failed to update document ${documentId} after ingestion failure:`, stateError);
+        }
+      }
+      throw error;
     }
-  }
+  };
+}
+
+const processMessage = createMessageProcessor();
+
+async function handleMessage(message, queueUrl, {
+  process = processMessage,
+  deleteMessage = (url, receiptHandle) => sqs.send(new DeleteMessageCommand({
+    QueueUrl: url,
+    ReceiptHandle: receiptHandle,
+  })),
+} = {}) {
+  await process(message);
+  await deleteMessage(queueUrl, message.ReceiptHandle);
 }
 
 async function runWorker() {
@@ -47,8 +70,11 @@ async function runWorker() {
       VisibilityTimeout: 120,
     }));
     for (const message of response.Messages || []) {
-      await processMessage(message);
-      await sqs.send(new DeleteMessageCommand({ QueueUrl: url, ReceiptHandle: message.ReceiptHandle }));
+      try {
+        await handleMessage(message, url);
+      } catch (error) {
+        console.error(`SQS message ${message.MessageId || '(unknown)'} failed and will be retried:`, error);
+      }
     }
   }
 }
@@ -60,4 +86,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { processMessage, runWorker };
+module.exports = { createMessageProcessor, handleMessage, processMessage, runWorker };

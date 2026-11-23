@@ -6,7 +6,12 @@ import {
 } from '@aws-sdk/client-dynamodb';
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { CreateBucketCommand, HeadBucketCommand, PutBucketCorsCommand } from '@aws-sdk/client-s3';
-import { CreateQueueCommand, GetQueueUrlCommand } from '@aws-sdk/client-sqs';
+import {
+  CreateQueueCommand,
+  GetQueueAttributesCommand,
+  GetQueueUrlCommand,
+  SetQueueAttributesCommand,
+} from '@aws-sdk/client-sqs';
 import aws from '../backend/src/lib/aws.js';
 import passwordTools from '../backend/src/lib/passwords.js';
 import resourceNames from '../backend/src/lib/resource-names.js';
@@ -112,17 +117,50 @@ async function main() {
   }));
 
   if (!process.env.DOC_INGEST_QUEUE_URL) {
-    const queueName = 'doc-ingest-queue';
+    const deadLetterQueueName = 'doc-ingest-dlq';
+    let deadLetterQueueUrl;
     try {
-      await sqs.send(new GetQueueUrlCommand({ QueueName: queueName }));
+      deadLetterQueueUrl = (await sqs.send(new GetQueueUrlCommand({
+        QueueName: deadLetterQueueName,
+      }))).QueueUrl;
     } catch (error) {
       if (error.name !== 'QueueDoesNotExist') throw error;
-      await sqs.send(new CreateQueueCommand({
+      deadLetterQueueUrl = (await sqs.send(new CreateQueueCommand({
+        QueueName: deadLetterQueueName,
+        Attributes: { MessageRetentionPeriod: '1209600' },
+      }))).QueueUrl;
+      console.log(`Created SQS queue ${deadLetterQueueName}`);
+    }
+
+    const deadLetterQueue = await sqs.send(new GetQueueAttributesCommand({
+      QueueUrl: deadLetterQueueUrl,
+      AttributeNames: ['QueueArn'],
+    }));
+    const deadLetterTargetArn = deadLetterQueue.Attributes?.QueueArn;
+    if (!deadLetterTargetArn) throw new Error(`SQS did not return an ARN for ${deadLetterQueueName}`);
+
+    const queueName = 'doc-ingest-queue';
+    let queueUrl;
+    try {
+      queueUrl = (await sqs.send(new GetQueueUrlCommand({ QueueName: queueName }))).QueueUrl;
+    } catch (error) {
+      if (error.name !== 'QueueDoesNotExist') throw error;
+      queueUrl = (await sqs.send(new CreateQueueCommand({
         QueueName: queueName,
-        Attributes: { ReceiveMessageWaitTimeSeconds: '20', VisibilityTimeout: '120' },
-      }));
+        Attributes: {
+          ReceiveMessageWaitTimeSeconds: '20',
+          VisibilityTimeout: '120',
+          RedrivePolicy: JSON.stringify({ deadLetterTargetArn, maxReceiveCount: 3 }),
+        },
+      }))).QueueUrl;
       console.log(`Created SQS queue ${queueName}`);
     }
+    await sqs.send(new SetQueueAttributesCommand({
+      QueueUrl: queueUrl,
+      Attributes: {
+        RedrivePolicy: JSON.stringify({ deadLetterTargetArn, maxReceiveCount: 3 }),
+      },
+    }));
   }
   console.log('AWS Emulator resources are ready');
 }

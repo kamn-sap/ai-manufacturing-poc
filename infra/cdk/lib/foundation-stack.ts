@@ -94,11 +94,19 @@ export class FoundationStack extends Stack {
       'id',
     );
 
+    const documentIngestDeadLetterQueue = new Queue(this, 'DocumentIngestDeadLetterQueue', {
+      queueName: `${resourcePrefix}-doc-ingest-dlq`,
+      encryption: QueueEncryption.SQS_MANAGED,
+      retentionPeriod: Duration.days(14),
+      ...retained,
+    });
+
     const documentIngestQueue = new Queue(this, 'DocumentIngestQueue', {
       queueName: `${resourcePrefix}-doc-ingest`,
       encryption: QueueEncryption.SQS_MANAGED,
       receiveMessageWaitTime: Duration.seconds(20),
       visibilityTimeout: Duration.seconds(120),
+      deadLetterQueue: { queue: documentIngestDeadLetterQueue, maxReceiveCount: 3 },
       ...retained,
     });
 
@@ -109,6 +117,9 @@ export class FoundationStack extends Stack {
     new CfnOutput(this, 'ReviewSessionsTableName', { value: reviewSessionsTable.tableName });
     new CfnOutput(this, 'ReviewFindingsTableName', { value: reviewFindingsTable.tableName });
     new CfnOutput(this, 'DocumentIngestQueueUrl', { value: documentIngestQueue.queueUrl });
+    new CfnOutput(this, 'DocumentIngestDeadLetterQueueUrl', {
+      value: documentIngestDeadLetterQueue.queueUrl,
+    });
     new CfnOutput(this, 'AppOrigin', { value: appOrigin });
   }
 }

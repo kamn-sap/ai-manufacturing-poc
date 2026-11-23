@@ -13,6 +13,7 @@ flowchart LR
     FE -->|署名付きPUT| S3[(🪣 S3)]
     API -->|取り込み依頼| SQS[📨 SQS]
     SQS --> WORKER[⚙️ Node.js Worker]
+    SQS -->|3回失敗| DLQ[🧺 Dead-letter queue]
     WORKER -->|ダウンロード| S3
     WORKER --> EXTRACT[📄 抽出・チャンク化]
     EXTRACT --> FTS[(🔎 SQLite FTS5)]
@@ -62,9 +63,11 @@ sequenceDiagram
 ```
 
 - ✅ 文書一覧で状態が「利用可能」になってから質問や設計レビューに使えます。
-- ⚠️ 現状のWorkerには、本番で必要な失敗時再試行・DLQ・冪等性の整備が残っています。
+- ⚠️ 取り込み失敗時はSQSが最大3回まで再配信し、その後DLQへ移します。DLQの監視・再送運用は別途整備が必要です。
 
 ローカルEmulatorはS3のCORS応答を返さないため、署名付きURLをViteの同一オリジンproxy経由で利用します。実AWSでは署名付きURLをS3へ直接送信し、bucket CORSで画面のoriginを許可します。
+
+取り込みに失敗したメッセージは削除せず、SQSが再配信します。最大3回失敗するとDLQへ移動します。現在、DLQのアラームや管理画面からの再送はありません。
 
 ## 💬 質問と根拠表示
 
@@ -132,7 +135,7 @@ sequenceDiagram
 
 Foundation Stackは、非公開・暗号化したS3バケット、オンデマンド課金のDynamoDB 4テーブル、暗号化SQSキューを定義します。環境別のリソース名とCloudFormation outputsを生成し、アプリの`S3_BUCKET`、`*_TABLE_NAME`、`DOC_INGEST_QUEUE_URL`へ設定できます。データリソースはStack削除時に保持します。
 
-実行基盤を選ぶ前のため、VPC/セキュリティグループ、EC2またはECS、Cognito、アプリ用IAMロール、DLQ/再試行、バックアップ、監視アラームはまだ含めていません。これらは実行基盤、IdP、RPO/RTO、予算の決定後にStackへ追加します。
+実行基盤を選ぶ前のため、VPC/セキュリティグループ、EC2またはECS、Cognito、アプリ用IAMロール、バックアップ、監視アラームはまだ含めていません。これらは実行基盤、IdP、RPO/RTO、予算の決定後にStackへ追加します。SQSには3回でDLQへ移すredrive policyを設定していますが、DLQ監視・再送手順は別途必要です。
 
 ```mermaid
 sequenceDiagram
@@ -211,7 +214,7 @@ GitHub Actionsは手動実行、アプリ/CDK関連ファイルの変更時に�
 
 - SQLite FTS5はローカルディスク上にあり、複数API/Worker間で共有できません。水平スケール前に共有検索基盤への移行が必要です。
 - 文書一覧などのDynamoDBアクセスは本番向けの容量・アクセスパターン最適化が未完了です。
-- SQS処理の再試行、DLQ、冪等性、障害時の運用は本番品質ではありません。
+- SQSの3回再試行とDLQは設定済みです。DLQアラーム、メッセージ調査・再送、障害時の運用手順は未整備です。
 - OCR、動画・図面解析、ベクトル検索、複雑な承認フローは対象外です。
 - AI出力は正確性や安全性を保証しません。安全作業は承認済み原文を確認し、設計判断は担当者が行ってください。
 
