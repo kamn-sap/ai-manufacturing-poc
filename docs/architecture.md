@@ -29,6 +29,18 @@ AWS Emulatorの導入・利用方法は[Emulator GitHub](https://github.com/aws/
 
 ## ローカル起動
 
+Docker DesktopまたはDocker Engine、Node.js 26+、pnpm 12+が利用できる場合は、次の簡易起動を推奨します。
+
+```sh
+pnpm dev:local
+```
+
+`pnpm dev:local` はDockerでAWS Emulatorを起動し、ホスト側で依存関係確認・リソース初期化・画面/API/worker起動を行います。終了時は `Ctrl+C` でEmulatorコンテナも停止します。
+
+初回起動では `.env.example` から `.env` を作成します。開発用の認証情報を確認し、ローカル開発以外では使用しないでください。AWS EmulatorのDynamoDB/S3/SQSリソースはメモリ上にあり、コンテナ停止時に消去されます。Emulatorが生成するcredential/config/CAファイルは `~/.aws/emulator/` に残ります。
+
+手動で起動する場合は次の手順を使います。
+
 1. Node.js 26+ と pnpm 12+、AWS Emulatorを用意します。Linux/Docker起動時の既定endpointは `https://127.0.0.1:9297` です。
 2. Emulatorが生成するcredential/config/CAファイルのパスを確認し、`.env.example` を `.env` にコピーして `AWS_SHARED_CREDENTIALS_FILE`、`AWS_CONFIG_FILE`、`AWS_CA_BUNDLE` を設定します。SDKが証明書を信頼するようCA bundleを読み込みます。実AWSの `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_SESSION_TOKEN`、`AWS_PROFILE` が環境に設定されている場合は外してください。ブラウザーから署名付きURLを使う場合は、EmulatorのCA証明書をOS/ブラウザー側でも信頼させてください。JWT secretとログインパスワードも必ず変更してください。
 3. 依存関係をインストールし、`pnpm aws:init` でAWSリソースを初期化します。

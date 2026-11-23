@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"node --env-file-if-exists=.env --watch backend/src/server.js\" \"node node_modules/vite/bin/vite.js --host 0.0.0.0 --config vite.config.js frontend\"",
+    "dev:local": "bash scripts/local-start.sh",
     "dev:api": "node --env-file-if-exists=.env --watch backend/src/server.js",
     "dev:web": "node node_modules/vite/bin/vite.js --host 0.0.0.0 --config vite.config.js frontend",
     "worker": "node --env-file-if-exists=.env backend/src/workers/ingestWorker.js",

@@ -11,7 +11,8 @@
 | `backend/src/services/` | TXT/Markdown/PDF/DOCX/XLSXの抽出、チャンク化、FTS5索引 |
 | `backend/src/workers/` | SQS long pollingによる非同期文書取り込み |
 | `backend/src/lib/` | AWS Emulator、JWT、DynamoDB認証、SQLite FTS5、決定的Mock LLM |
-| `scripts/` | AWS EmulatorのDynamoDB/S3/SQSリソース初期化 |
+| `scripts/` | AWS EmulatorのDynamoDB/S3/SQSリソース初期化、ローカル起動 |
+| `docker/aws-emulator/` | ローカル開発用AWS Emulatorコンテナ |
 | `fixtures/` | E2Eで利用する機密情報を含まない作業標準書・FAQ・設計書 |
 | `e2e/` | 文書登録から根拠表示まで、設計レビュー、人の判断記録、複数ユーザーの独立ログインを検証するPlaywrightシナリオ |
 | `docs/` | アーキテクチャと運用・安全上の注意 |
@@ -30,6 +31,18 @@ pnpm dev
 ```
 
 別ターミナルで `pnpm worker` を起動します。`pnpm aws:init` は `.env` のユーザーをAWS EmulatorのDynamoDB `Users` テーブルへパスワードハッシュで登録します。初期開発ログインは `operator` / `change-me` です。実行前に必ず `.env` の認証情報を変更してください。複数アカウントを登録する場合は `AUTH_USERS_JSON` にユーザー名とパスワードの配列を設定し、`pnpm aws:init` を再実行します。ユーザーごとのログインセッションは分離され、文書・レビューは共有ワークスペースとして利用します。
+
+### Dockerを使う簡易ローカル起動
+
+Docker DesktopまたはDocker Engine、Node.js 26+、pnpm 12+があれば、AWS Emulatorも含めて一つのコマンドで起動できます。
+
+```sh
+pnpm dev:local
+```
+
+このコマンドは、初回のみ `.env` を作成し、依存関係をセットアップし、AWS Emulatorコンテナを起動し、リソース初期化後に画面・API・workerを起動します。ブラウザーでは <http://localhost:5173> を開きます。終了時はターミナルで `Ctrl+C` を押すと、アプリとEmulatorコンテナを停止します。
+
+初回は `.env.example` から作成された `.env` の開発用認証情報を確認してください。AWS EmulatorのDynamoDB/S3/SQSリソースはメモリ上にあり、停止すると消去されます。Emulatorが生成するcredential/config/CAファイルは `~/.aws/emulator/` に保存されます。ローカル開発用途に限り、実AWSの認証情報は使用しません。
 
 ## チェック
 
