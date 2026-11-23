@@ -7,9 +7,11 @@
 | Frontend | React 19、Vite、React Router。文書ライブラリ、ナレッジアシスタント、設計レビュー |
 | API / Worker | Express 5、JWT保護API、SQS long polling worker |
 | オブジェクト | AWS Emulator上のS3。署名付きPUT/GET URL |
-| メタデータ・認証 | AWS Emulator上のDynamoDB（Users、Documents、ReviewSessions、ReviewFindings） |
+| メタデータ・認証 | AWS Emulator上のDynamoDB（Documents、ReviewSessions、ReviewFindings。ローカル認証時のみUsers）またはAmazon Cognito User Pool |
 | 全文検索 | SQLite FTS5 trigram tokenizer。ベクトル検索は行わない |
-| 回答生成 | `LLM_PROVIDER=mock` の決定的なテンプレート。実LLM接続は対象外 |
+| 回答生成 | `LLM_PROVIDER=mock`（決定的テンプレート）または `ollama`（loopback/private IP上のOllama）。外部推論サービスへの接続は対象外 |
+
+Providerの選択は起動時の環境設定で行い、LLMと認証は小さなProvider factoryを使います。検索は`createSearchProvider(database)`で索引DBを注入できます。保存/キューはAWS SDKを使い、`AWS_REGION`、`AWS_ENDPOINT_URL`、各AWSリソース設定でEmulatorまたは実AWSを選択します。現時点で検索ProviderはSQLite、保存/キューProviderはAWSのみです。別製品への入れ替えには対応実装とデータ移行が必要で、設定値だけで切り替わるわけではありません。
 
 AWS Emulatorの導入・利用方法は[Emulator GitHub](https://github.com/aws/aws-emulator)と[AWS Emulatorドキュメント](https://docs.aws.amazon.com/ja_jp/emulator/)を参照してください。
 
@@ -21,11 +23,21 @@ AWS Emulatorの導入・利用方法は[Emulator GitHub](https://github.com/aws/
 
 ## ログインとユーザー登録
 
-ログインAPIはDynamoDB `Users` テーブルからユーザーを検索し、scryptで保存したパスワードハッシュを照合してJWTを発行します。`pnpm aws:init` は `.env` の `AUTH_USERNAME` / `AUTH_PASSWORD`、または複数アカウント用の `AUTH_USERS_JSON` をハッシュ化して登録します。パスワード変更・ユーザー追加後は `pnpm aws:init` を再実行してください。各ユーザーのログイン状態はブラウザーごとに独立しますが、PoCの文書・レビュー領域は共有ワークスペースです。
+`AUTH_PROVIDER=local`（既定）ではログインAPIがDynamoDB `Users` テーブルのscryptハッシュを照合し、ローカルJWTを発行します。`pnpm aws:init` は `.env` の `AUTH_USERNAME` / `AUTH_PASSWORD`、または `AUTH_USERS_JSON` を登録します。
+
+`AUTH_PROVIDER=cognito` ではAmazon Cognito User Poolの `USER_PASSWORD_AUTH` を使い、APIがID tokenを検証します。`COGNITO_REGION`、`COGNITO_USER_POOL_ID`、`COGNITO_CLIENT_ID` を設定し、Cognitoアプリクライアントでこの認証フローを有効にしてください。ユーザーはCognito側で作成・管理し、`pnpm aws:init` はDynamoDB `Users` を作成・seedしません。MFA等の追加チャレンジを返すアプリクライアントは現行ログイン画面では完了できず、追加認証が必要な旨を返します。これは試し運用向けの接続であり、公開運用前にMFA/Hosted UI、アカウント復旧、レート制限、監査要件を決めてください。
+
+いずれの認証Providerでも各ユーザーのログイン状態はブラウザーごとに独立しますが、現状の文書・レビュー領域は共有ワークスペースです。Cognitoを導入しても文書単位の権限分離が自動で追加されるわけではありません。
 
 ## 設計レビュー
 
 レビュー対象は取り込み済み文書です。Mock AIが確認観点、指摘候補、品質リスク、テスト観点、根拠箇所を返します。生成結果は常に候補状態で保存し、担当者が採用・却下・修正を記録するまでは確定指摘として扱いません。
+
+## ローカルLLM
+
+試し運用では `LLM_PROVIDER=ollama` を指定し、`OLLAMA_BASE_URL` と `OLLAMA_MODEL` でOllamaを選択します。既定URLは `http://127.0.0.1:11434` です。Ollamaは同じEC2上、またはプライベートネットワーク内で実行し、インターネットへ公開しないでください。公開ホスト名を指定した場合は設定エラーになります。モデル出力の引用箇所は生成させず、検索で取得した文書チャンクだけを引用として返します。モデルの品質・応答時間・必要メモリ・費用は実文書を外部へ送らない評価環境で確認してください。
+
+`LLM_PROVIDER=mock` は従来どおり既定値です。Ollamaを選択する場合、指定モデルを事前に取得し、`OLLAMA_TIMEOUT_MS` でリクエスト上限時間を設定します。
 
 ## ローカル起動
 
@@ -65,4 +77,4 @@ GitHubリポジトリの **Settings → Pages → Build and deployment → Sourc
 
 ## 対象外と安全上の注意
 
-OCR、動画文字起こし、図面解析、ベクトル検索、実LLM接続、複雑な承認フローは対象外です。AIの出力は参考情報です。安全に関わる作業は承認済みの原文と現場の安全手順を確認し、設計の最終判断は人が行ってください。
+OCR、動画文字起こし、図面解析、ベクトル検索、Bedrock等の外部推論サービス、複雑な承認フローは対象外です。AIの出力は参考情報です。安全に関わる作業は承認済みの原文と現場の安全手順を確認し、設計の最終判断は人が行ってください。

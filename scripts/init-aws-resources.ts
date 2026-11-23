@@ -35,9 +35,15 @@ async function createTableIfMissing(TableName, KeySchema, AttributeDefinitions) 
 }
 
 async function main() {
-  await createTableIfMissing('Users', [
-    { AttributeName: 'username', KeyType: 'HASH' },
-  ], [{ AttributeName: 'username', AttributeType: 'S' }]);
+  const authProvider = process.env.AUTH_PROVIDER || 'local';
+  if (!['local', 'cognito'].includes(authProvider)) {
+    throw new Error(`AUTH_PROVIDER "${authProvider}" is not configured. Available providers: local, cognito`);
+  }
+  if (authProvider === 'local') {
+    await createTableIfMissing('Users', [
+      { AttributeName: 'username', KeyType: 'HASH' },
+    ], [{ AttributeName: 'username', AttributeType: 'S' }]);
+  }
   await createTableIfMissing('Documents', [
     { AttributeName: 'id', KeyType: 'HASH' },
   ], [{ AttributeName: 'id', AttributeType: 'S' }]);
@@ -48,36 +54,38 @@ async function main() {
     { AttributeName: 'id', KeyType: 'HASH' },
   ], [{ AttributeName: 'id', AttributeType: 'S' }]);
 
-  const configuredUsers = process.env.AUTH_USERS_JSON
-    ? JSON.parse(process.env.AUTH_USERS_JSON)
-    : [{
-      username: process.env.AUTH_USERNAME || 'operator',
-      password: process.env.AUTH_PASSWORD || 'change-me',
-    }];
-  if (!Array.isArray(configuredUsers) || configuredUsers.length === 0 || configuredUsers.length > 100) {
-    throw new Error('AUTH_USERS_JSON must be an array containing 1 to 100 users');
-  }
-  const seededUsernames = new Set();
-  for (const configuredUser of configuredUsers) {
-    const username = normalizeUsername(configuredUser?.username);
-    if (
-      !username
-      || typeof configuredUser.password !== 'string'
-      || configuredUser.password.length < 8
-      || configuredUser.password.length > 1024
-      || seededUsernames.has(username)
-    ) {
-      throw new Error('Each configured user must have a unique username and a password of 8 to 1024 characters');
+  if (authProvider === 'local') {
+    const configuredUsers = process.env.AUTH_USERS_JSON
+      ? JSON.parse(process.env.AUTH_USERS_JSON)
+      : [{
+        username: process.env.AUTH_USERNAME || 'operator',
+        password: process.env.AUTH_PASSWORD || 'change-me',
+      }];
+    if (!Array.isArray(configuredUsers) || configuredUsers.length === 0 || configuredUsers.length > 100) {
+      throw new Error('AUTH_USERS_JSON must be an array containing 1 to 100 users');
     }
-    seededUsernames.add(username);
-    await dynamo.send(new PutCommand({
-      TableName: 'Users',
-      Item: {
-        username,
-        ...hashPassword(configuredUser.password),
-        createdAt: new Date().toISOString(),
-      },
-    }));
+    const seededUsernames = new Set();
+    for (const configuredUser of configuredUsers) {
+      const username = normalizeUsername(configuredUser?.username);
+      if (
+        !username
+        || typeof configuredUser.password !== 'string'
+        || configuredUser.password.length < 8
+        || configuredUser.password.length > 1024
+        || seededUsernames.has(username)
+      ) {
+        throw new Error('Each configured user must have a unique username and a password of 8 to 1024 characters');
+      }
+      seededUsernames.add(username);
+      await dynamo.send(new PutCommand({
+        TableName: 'Users',
+        Item: {
+          username,
+          ...hashPassword(configuredUser.password),
+          createdAt: new Date().toISOString(),
+        },
+      }));
+    }
   }
 
   const bucket = process.env.S3_BUCKET || 'manufacturing-documents';

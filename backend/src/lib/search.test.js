@@ -3,7 +3,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 process.env.SQLITE_PATH = ':memory:';
 
 const db = require('../db');
-const { searchChunks } = require('./search');
+const Database = require('better-sqlite3');
+const { createSearchProvider, searchChunks } = require('./search');
 
 describe('FTS5 search', () => {
   beforeAll(() => {
@@ -26,5 +27,31 @@ describe('FTS5 search', () => {
 
   it('does not issue malformed FTS queries for short terms', () => {
     expect(searchChunks('異音')).toHaveLength(1);
+  });
+
+  it('uses an injected search index', () => {
+    const injectedDb = new Database(':memory:');
+    injectedDb.exec(`
+      CREATE VIRTUAL TABLE document_chunks USING fts5(
+        document_id UNINDEXED,
+        section UNINDEXED,
+        page UNINDEXED,
+        content,
+        tokenize = 'trigram'
+      )
+    `);
+    injectedDb.prepare(`
+      INSERT INTO document_chunks (document_id, section, page, content)
+      VALUES (?, ?, ?, ?)
+    `).run('injected-doc', '点検', 4, '冷却水の量を点検します。');
+    const provider = createSearchProvider(injectedDb);
+
+    try {
+      expect(provider.searchChunks('冷却水')).toMatchObject([
+        { document_id: 'injected-doc', section: '点検', page: 4 },
+      ]);
+    } finally {
+      injectedDb.close();
+    }
   });
 });

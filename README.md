@@ -10,7 +10,7 @@
 | `backend/src/routes/` | JWT保護された文書・検索・レビューAPIと署名付きファイルURL |
 | `backend/src/services/` | TXT/Markdown/PDF/DOCX/XLSXの抽出、チャンク化、FTS5索引 |
 | `backend/src/workers/` | SQS long pollingによる非同期文書取り込み |
-| `backend/src/lib/` | AWS Emulator、JWT、DynamoDB認証、SQLite FTS5、決定的Mock LLM |
+| `backend/src/lib/` | AWS Emulator、ローカル/Cognito認証、SQLite FTS5、Mock/Ollama LLM provider |
 | `scripts/` | AWS EmulatorのDynamoDB/S3/SQSリソース初期化、ローカル起動 |
 | `docker/aws-emulator/` | ローカル開発用AWS Emulatorコンテナ |
 | `fixtures/` | E2Eで利用する機密情報を含まない作業標準書・FAQ・設計書 |
@@ -30,7 +30,7 @@ pnpm aws:init
 pnpm dev
 ```
 
-別ターミナルで `pnpm worker` を起動します。`pnpm aws:init` は `.env` のユーザーをAWS EmulatorのDynamoDB `Users` テーブルへパスワードハッシュで登録します。初期開発ログインは `operator` / `change-me` です。実行前に必ず `.env` の認証情報を変更してください。複数アカウントを登録する場合は `AUTH_USERS_JSON` にユーザー名とパスワードの配列を設定し、`pnpm aws:init` を再実行します。ユーザーごとのログインセッションは分離され、文書・レビューは共有ワークスペースとして利用します。
+別ターミナルで `pnpm worker` を起動します。`AUTH_PROVIDER=local` の場合、`pnpm aws:init` は `.env` のユーザーをAWS EmulatorのDynamoDB `Users` テーブルへパスワードハッシュで登録します。初期開発ログインは `operator` / `change-me` です。実行前に必ず `.env` の認証情報を変更してください。Cognitoを使う場合は `AUTH_PROVIDER=cognito` とUser Pool/Client IDを設定し、ユーザーはCognito側で管理します。ユーザーごとのログインセッションは分離され、文書・レビューは共有ワークスペースとして利用します。
 
 ### Dockerを使う簡易ローカル起動
 
@@ -52,6 +52,6 @@ pnpm lint
 pnpm test:e2e
 ```
 
-ベクトル検索、OCR、動画・図面解析、実LLM接続は含みません。AI出力は参考情報であり、安全作業は承認済み原文の確認、設計指摘は担当者による採否が必要です。
+ベクトル検索、OCR、動画・図面解析、Bedrock等の外部推論サービスは含みません。`LLM_PROVIDER=ollama` を指定すると、loopback/private IP上のOllamaを利用できます（既定値はMock）。AI出力は参考情報であり、安全作業は承認済み原文の確認、設計指摘は担当者による採否が必要です。
 
 GitHub Actionsは手動実行、またはアプリ関連ファイルのpush/PRで検証を実行します。default branchでは成功・失敗を含む検証結果をGitHub Pagesに公開し、E2Eレポート内で各テストの録画動画を参照できます。PR等のdefault branch以外の実行結果はActions artifactから確認できます。Pagesの公開先はリポジトリ設定でGitHub Actionsを有効にしてください。

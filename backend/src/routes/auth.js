@@ -1,7 +1,6 @@
 const express = require('express');
-const { createToken } = require('../lib/auth');
-const { normalizeUsername, verifyPassword } = require('../lib/passwords');
-const { findUser } = require('../services/users');
+const { AuthChallengeRequiredError, authProvider } = require('../lib/auth');
+const { normalizeUsername } = require('../lib/passwords');
 
 const router = express.Router();
 
@@ -12,11 +11,21 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'ユーザー名またはパスワードが違います。' });
   }
 
-  const user = await findUser(normalizedUsername);
-  if (!user || !verifyPassword(password, user)) {
-    return res.status(401).json({ error: 'ユーザー名またはパスワードが違います。' });
+  try {
+    const session = await authProvider.authenticate(normalizedUsername, password);
+    if (!session) {
+      return res.status(401).json({ error: 'ユーザー名またはパスワードが違います。' });
+    }
+    return res.json(session);
+  } catch (error) {
+    if (error instanceof AuthChallengeRequiredError) {
+      return res.status(409).json({
+        error: '追加認証が必要です。このログイン画面ではCognitoの追加認証に対応していません。',
+        challenge: error.challengeName,
+      });
+    }
+    throw error;
   }
-  return res.json({ token: createToken(user.username), username: user.username });
 });
 
 module.exports = router;
