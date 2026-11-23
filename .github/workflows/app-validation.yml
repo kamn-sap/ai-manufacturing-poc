@@ -139,6 +139,7 @@ jobs:
         with:
           artifact-ids: ${{ needs.verify.outputs.report-artifact-id }}
           path: pages-site
+          merge-multiple: true
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
