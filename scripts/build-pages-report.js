@@ -44,6 +44,7 @@ if (existsSync('playwright-report')) cpSync('playwright-report', e2eReportDirect
 const statuses = {
   unit: process.env.UNIT_STATUS || 'skipped',
   lint: process.env.LINT_STATUS || 'skipped',
+  cdk: process.env.CDK_STATUS || 'skipped',
   e2e: process.env.E2E_STATUS || 'skipped',
 };
 if (!existsSync(`${e2eReportDirectory}/index.html`)) {
@@ -73,7 +74,7 @@ const html = `<!doctype html>
     *{box-sizing:border-box}body{margin:0;padding:40px 18px}.wrap{max-width:980px;margin:auto}
     header{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:26px}
     h1{font-size:28px;letter-spacing:-.04em;margin:5px 0}.eyebrow{font-size:10px;font-weight:700;letter-spacing:.14em;color:#368260}
-    .meta{font-size:12px;color:#77837b}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+    .meta{font-size:12px;color:#77837b}    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
     .card,section{background:white;border:1px solid #e4eae5;border-radius:12px}
     .card{padding:18px}.card span:first-child{display:block;color:#78837c;font-size:12px}
     .badge{display:inline-flex;align-items:center;border-radius:30px;padding:5px 10px;font-weight:700;font-size:11px}
@@ -84,6 +85,7 @@ const html = `<!doctype html>
     .link:hover{border-color:#76ae8d}.note{font-size:12px;color:#68756d;line-height:1.7}
     table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;padding:9px 8px;border-top:1px solid #edf0ed}
     th{color:#78837c;font-weight:600}.foot{margin-top:17px;font-size:11px;color:#87928a}
+    @media(max-width:800px){.cards{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:600px){body{padding:24px 12px}header{display:block}.cards{grid-template-columns:1fr}.meta{margin-top:10px}section{padding:14px}table{font-size:10px}}
   </style>
 </head>
@@ -92,6 +94,7 @@ const html = `<!doctype html>
   <div class="cards">
     <div class="card"><span>ユニットテスト</span><strong class="badge ${badgeClass(statuses.unit)}">${labels[statuses.unit] || '不明'} · ${unitResults.tests}件</strong></div>
     <div class="card"><span>Lint</span><strong class="badge ${badgeClass(statuses.lint)}">${labels[statuses.lint] || '不明'}</strong></div>
+    <div class="card"><span>CDK合成</span><strong class="badge ${badgeClass(statuses.cdk)}">${labels[statuses.cdk] || '不明'}</strong></div>
     <div class="card"><span>Playwright E2E</span><strong class="badge ${badgeClass(statuses.e2e)}">${labels[statuses.e2e] || '不明'}</strong></div>
   </div>
   <section><h2>E2E結果と録画</h2><p class="note">Playwrightの詳細レポートでは、テストごとの実行結果・スクリーンショット・録画動画を参照できます。</p><div class="links"><a class="link" href="./e2e/index.html">E2Eレポートを開く（動画あり）</a>${unitResults.tests ? '<a class="link" href="./unit-results.xml">UT JUnit結果</a>' : ''}</div></section>

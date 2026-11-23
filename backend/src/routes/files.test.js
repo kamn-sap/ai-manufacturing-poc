@@ -33,4 +33,16 @@ describe('browserFileUrl', () => {
       else process.env.AWS_ENDPOINT_URL = previousEndpoint;
     }
   });
+
+  it('keeps standard AWS endpoint URLs direct when no custom endpoint is configured', () => {
+    const previousEndpoint = process.env.AWS_ENDPOINT_URL;
+    delete process.env.AWS_ENDPOINT_URL;
+
+    try {
+      const signedUrl = 'https://bucket.s3.ap-northeast-1.amazonaws.com/key?signature=value';
+      expect(browserFileUrl(signedUrl)).toBe(signedUrl);
+    } finally {
+      if (previousEndpoint !== undefined) process.env.AWS_ENDPOINT_URL = previousEndpoint;
+    }
+  });
 });

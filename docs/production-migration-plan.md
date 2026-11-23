@@ -22,7 +22,7 @@ flowchart LR
 ## ❓ 前提と着手前に決めること
 
 - AWS東京リージョンを利用します。月額約1,000円は目標であり、可用性・バックアップを備えた場合の費用とは分けて見積もります。
-- AWSインフラのIaCにはAWS CDKを採用します。既存のTypeScriptスクリプトとの親和性からCDKもTypeScriptを想定します。CDKコードや実AWSへのデプロイはまだありません。
+- AWSインフラのIaCにはAWS CDK（TypeScript）を採用します。アカウントに依存しないFoundation Stack（S3、DynamoDB 4テーブル、SQS）を実装し、synthとテストをローカルで実行できます。AWSアカウントへのデプロイはまだありません。
 - CDK採用と実行基盤選定は別の判断です。30人ベータの単一EC2案とECS等を費用・運用要件で比較してから、CDK Stackの構成を決めます。
 - 利用者が登録した文書を外部推論サービスへ送らない方針です。AWS EC2上のOllamaを候補とし、Bedrockは方針変更がある場合のみ再評価します。
 - GitHub Copilot Pro / CLIは開発支援用途です。利用者向け推論基盤には採用せず、契約・データ取り扱いが確認されるまで業務データを入力しません。
@@ -43,12 +43,12 @@ flowchart LR
 | 領域 | 現在 | 実運用に必要な作業 |
 | --- | --- | --- |
 | 🧩 アプリ | React/Vite、Express API、SQS Worker | 実AWS構成、CDK Stack、環境分離 |
-| ☁️ AWS | ローカルはEmulator、AWS SDKで接続先を設定 | IAM最小権限、秘密情報、暗号化、監視 |
+| ☁️ AWS | ローカルはEmulator。CDK Foundation Stackはsynth/test可能 | 実AWSデプロイ、IAM最小権限、実行基盤、秘密情報、監視 |
 | 🔎 検索 | SQLite FTS5をローカルディスクに保存 | 複数インスタンスで共有できる検索基盤 |
 | 🗂️ データ | DynamoDB文書一覧でScan、文書・レビューは共有 | Query/GSI、ページネーション、権限キー |
 | 📨 キュー | SQS Workerが文書を取り込み | 再試行、DLQ、冪等性、失敗時状態遷移 |
 | 🪪 認証 | Local / Cognito Provider | User Pool IaC、MFA、権限、復旧、監査 |
-| 🚀 CI/CD | GitHub Actionsでテスト・lint・E2E | AWS OIDC、承認、デプロイ、ロールバック |
+| 🚀 CI/CD | GitHub Actionsでテスト・lint・E2E・CDK合成 | AWS OIDC、承認、デプロイ、ロールバック |
 
 現状のProvider境界は軽量な差し替え口です。検索や保存層を設定だけで他製品へ切り替えるものではなく、別実装とデータ移行が必要です。実Ollamaモデル、Cognito User Pool、実AWS統合試験は未実施です。
 
@@ -61,7 +61,7 @@ flowchart LR
 ### 🧪 B. 約30人・同時約10人の社内限定ベータ — 規模 L
 
 1. 単一EC2上のコンテナ案とECS等のマネージド構成を、費用・運用・障害影響で比較します。約1,000円を厳格上限とする場合、常時稼働・バックアップ・冗長化をすべて満たすのは難しい可能性があります。
-2. 選定した実行基盤とS3/DynamoDB/SQS等をAWS CDK（TypeScript）で定義します。開発・検証・本番相当の環境分離、IAM最小権限、秘密情報管理、暗号化、ネットワーク境界をStackに反映します。
+2. 既存のFoundation Stackを拡張し、選定した実行基盤と必要なAWSリソースをCDKで定義します。開発・検証・本番相当の環境分離、IAM最小権限、秘密情報管理、暗号化、ネットワーク境界をStackに反映します。
 3. SQLite索引の永続化とバックアップ/リストアを整備し、単一インスタンス制約を明文化します。SQSに再試行・DLQ・冪等処理を追加します。
 4. Cognitoまたは既存IdPを比較し、ユーザー管理、MFA、ロール、共有ワークスペースの境界を決めます。
 5. 初期はLLM Mockを維持します。Ollamaは社内管理下の環境で、機密文書を外部へ送らずに品質・日本語性能・レイテンシ・必要メモリ・費用を評価します。
@@ -139,7 +139,7 @@ sequenceDiagram
 | --- | --- | --- | --- |
 | 1 | 運用要件・費用上限・データ分類・ピーク負荷・RPO/RTOを定義 | 運用条件と受入基準を合意 | M |
 | 2 | 30人ベータと1000人向け構成・費用を比較 | 構成案・見積・未決事項を比較表にする | M |
-| 3 | AWS CDK（TypeScript）でIaC、環境分離、IAM、秘密情報管理を整備 | `cdk synth`と再現可能な環境、最小権限を確認 | L |
+| 3 | AWS CDK Foundation Stackを拡張し、環境分離、IAM、秘密情報管理を整備 | `cdk synth`、再現可能な環境、最小権限を確認 | L |
 | 4 | 永続化、SQLite索引のバックアップ、SQS再試行/DLQを整備 | 失敗・復旧シナリオを試験 | L |
 | 5 | IdP、MFA、ロール、文書アクセス境界を実装 | 認証・認可要件をテストで確認 | M/L |
 | 6 | Copilot CLI、Ollama、Bedrockのデータ境界・品質・費用を評価 | 採用/不採用と根拠を記録 | M |

@@ -2,12 +2,14 @@ const crypto = require('node:crypto');
 const { GetCommand } = require('@aws-sdk/lib-dynamodb');
 const express = require('express');
 const { dynamo } = require('../lib/aws');
+const { getResourceNames } = require('../lib/resource-names');
 const { getDocument } = require('../lib/documents');
 const { analyzeDesign } = require('../lib/llm');
 const { getReviewSession, listFindings, saveFinding, saveReviewSession, updateFinding } = require('../lib/reviews');
 const { getChunksByDocumentIds } = require('../lib/search');
 
 const router = express.Router();
+const reviewFindingsTable = getResourceNames().reviewFindings;
 
 router.post('/sessions', async (req, res) => {
   const { documentIds } = req.body || {};
@@ -100,7 +102,7 @@ router.patch('/findings/:id', async (req, res) => {
     return res.status(400).json({ error: '修正内容を入力してください。' });
   }
   const existing = await dynamo.send(new GetCommand({
-    TableName: 'ReviewFindings',
+    TableName: reviewFindingsTable,
     Key: { id: req.params.id },
   }));
   if (!existing.Item) return res.status(404).json({ error: '指摘候補が見つかりません。' });

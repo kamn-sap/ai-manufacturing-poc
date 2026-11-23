@@ -9,9 +9,11 @@ import { CreateBucketCommand, HeadBucketCommand, PutBucketCorsCommand } from '@a
 import { CreateQueueCommand, GetQueueUrlCommand } from '@aws-sdk/client-sqs';
 import aws from '../backend/src/lib/aws.js';
 import passwordTools from '../backend/src/lib/passwords.js';
+import resourceNames from '../backend/src/lib/resource-names.js';
 
 const { dynamo, s3, sqs } = aws;
 const { hashPassword, normalizeUsername } = passwordTools;
+const tables = resourceNames.getResourceNames();
 
 async function createTableIfMissing(TableName, KeySchema, AttributeDefinitions) {
   try {
@@ -40,17 +42,17 @@ async function main() {
     throw new Error(`AUTH_PROVIDER "${authProvider}" is not configured. Available providers: local, cognito`);
   }
   if (authProvider === 'local') {
-    await createTableIfMissing('Users', [
+    await createTableIfMissing(tables.users, [
       { AttributeName: 'username', KeyType: 'HASH' },
     ], [{ AttributeName: 'username', AttributeType: 'S' }]);
   }
-  await createTableIfMissing('Documents', [
+  await createTableIfMissing(tables.documents, [
     { AttributeName: 'id', KeyType: 'HASH' },
   ], [{ AttributeName: 'id', AttributeType: 'S' }]);
-  await createTableIfMissing('ReviewSessions', [
+  await createTableIfMissing(tables.reviewSessions, [
     { AttributeName: 'id', KeyType: 'HASH' },
   ], [{ AttributeName: 'id', AttributeType: 'S' }]);
-  await createTableIfMissing('ReviewFindings', [
+  await createTableIfMissing(tables.reviewFindings, [
     { AttributeName: 'id', KeyType: 'HASH' },
   ], [{ AttributeName: 'id', AttributeType: 'S' }]);
 
@@ -78,7 +80,7 @@ async function main() {
       }
       seededUsernames.add(username);
       await dynamo.send(new PutCommand({
-        TableName: 'Users',
+        TableName: tables.users,
         Item: {
           username,
           ...hashPassword(configuredUser.password),
@@ -109,16 +111,18 @@ async function main() {
     },
   }));
 
-  const queueName = 'doc-ingest-queue';
-  try {
-    await sqs.send(new GetQueueUrlCommand({ QueueName: queueName }));
-  } catch (error) {
-    if (error.name !== 'QueueDoesNotExist') throw error;
-    await sqs.send(new CreateQueueCommand({
-      QueueName: queueName,
-      Attributes: { ReceiveMessageWaitTimeSeconds: '20', VisibilityTimeout: '120' },
-    }));
-    console.log(`Created SQS queue ${queueName}`);
+  if (!process.env.DOC_INGEST_QUEUE_URL) {
+    const queueName = 'doc-ingest-queue';
+    try {
+      await sqs.send(new GetQueueUrlCommand({ QueueName: queueName }));
+    } catch (error) {
+      if (error.name !== 'QueueDoesNotExist') throw error;
+      await sqs.send(new CreateQueueCommand({
+        QueueName: queueName,
+        Attributes: { ReceiveMessageWaitTimeSeconds: '20', VisibilityTimeout: '120' },
+      }));
+      console.log(`Created SQS queue ${queueName}`);
+    }
   }
   console.log('AWS Emulator resources are ready');
 }

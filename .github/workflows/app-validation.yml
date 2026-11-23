@@ -9,6 +9,8 @@ on:
       - 'e2e/**'
       - 'fixtures/**'
       - 'docs/**'
+      - 'infra/cdk/**'
+      - 'cdk.json'
       - '.github/workflows/**'
       - '.env.example'
       - 'README.md'
@@ -24,6 +26,8 @@ on:
       - 'e2e/**'
       - 'fixtures/**'
       - 'docs/**'
+      - 'infra/cdk/**'
+      - 'cdk.json'
       - '.github/workflows/**'
       - '.env.example'
       - 'README.md'
@@ -74,6 +78,12 @@ jobs:
         run: pnpm lint
         continue-on-error: true
 
+      - name: CDK synthesis
+        id: cdk
+        if: always() && steps.install.outcome == 'success'
+        run: pnpm cdk:synth
+        continue-on-error: true
+
       - name: Install Playwright browser
         id: browser
         if: always() && steps.install.outcome == 'success'
@@ -91,6 +101,7 @@ jobs:
         env:
           UNIT_STATUS: ${{ steps.unit.outcome || 'skipped' }}
           LINT_STATUS: ${{ steps.lint.outcome || 'skipped' }}
+          CDK_STATUS: ${{ steps.cdk.outcome || 'skipped' }}
           E2E_STATUS: ${{ steps.e2e.outcome || 'skipped' }}
         run: node scripts/build-pages-report.js
 
@@ -110,10 +121,11 @@ jobs:
           INSTALL_STATUS: ${{ steps.install.outcome || 'skipped' }}
           UNIT_STATUS: ${{ steps.unit.outcome || 'skipped' }}
           LINT_STATUS: ${{ steps.lint.outcome || 'skipped' }}
+          CDK_STATUS: ${{ steps.cdk.outcome || 'skipped' }}
           BROWSER_STATUS: ${{ steps.browser.outcome || 'skipped' }}
           E2E_STATUS: ${{ steps.e2e.outcome || 'skipped' }}
         run: |
-          if [[ "$INSTALL_STATUS" != "success" || "$UNIT_STATUS" != "success" || "$LINT_STATUS" != "success" || "$BROWSER_STATUS" != "success" || "$E2E_STATUS" != "success" ]]; then
+          if [[ "$INSTALL_STATUS" != "success" || "$UNIT_STATUS" != "success" || "$LINT_STATUS" != "success" || "$CDK_STATUS" != "success" || "$BROWSER_STATUS" != "success" || "$E2E_STATUS" != "success" ]]; then
             echo "::error::One or more validation checks failed."
             exit 1
           fi

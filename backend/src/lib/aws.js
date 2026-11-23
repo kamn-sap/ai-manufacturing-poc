@@ -6,7 +6,7 @@ const { S3Client } = require('@aws-sdk/client-s3');
 const { SQSClient } = require('@aws-sdk/client-sqs');
 const { NodeHttpHandler } = require('@smithy/node-http-handler');
 
-const endpoint = process.env.AWS_ENDPOINT_URL || 'https://127.0.0.1:9297';
+const endpoint = process.env.AWS_ENDPOINT_URL;
 const region = process.env.AWS_REGION || 'us-east-1';
 const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
 const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -28,7 +28,7 @@ function requestHandler() {
 }
 const clientConfig = {
   region,
-  endpoint,
+  ...(endpoint ? { endpoint } : {}),
   credentials,
   disableHostPrefix: true,
 };

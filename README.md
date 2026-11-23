@@ -104,7 +104,15 @@ pnpm dev
 
 🌱 Provider境界は、PoCの接続先を選びやすくするためのものです。すべての基盤を設定値だけで他製品へ交換できる、という意味ではありません。詳細は[アーキテクチャ資料](./docs/architecture.md#providerと外部サービス)を参照してください。
 
-☁️ AWSインフラのIaCには **AWS CDK（TypeScriptを想定）** を採用する方針です。CDKコードやAWSデプロイはまだ実装していません。`.env.example` はアプリ実行時の接続設定であり、CDKのデプロイ用認証情報は含めません。
+☁️ AWSインフラのIaCには **AWS CDK（TypeScript）** を採用しました。S3・DynamoDB・SQSの基盤Stackを用意し、アカウントなしで合成・テストできます。実AWSへのデプロイ、実行基盤、VPC、Cognito等はまだ未実装です。
+
+```sh
+pnpm cdk:test
+pnpm cdk:typecheck
+pnpm cdk:synth
+```
+
+詳細は[CDK基盤のREADME](./infra/cdk/README.md)を参照してください。`.env.example` はアプリ実行時の接続設定で、CDKのデプロイ用認証情報は含めません。
 
 ## ✅ チェックとCI
 
@@ -114,7 +122,7 @@ pnpm dev
 | `pnpm lint` | Backend、Frontend、スクリプト、E2Eの静的検査 |
 | `pnpm test:e2e` | 画面操作のE2Eテスト（外部サービスはテスト用スタブ） |
 
-GitHub Actionsはテスト・lint・E2Eを実行しますが、AWSへはデプロイしません。将来のCDKデプロイではAWS OIDC、環境承認、変更確認、ロールバック等を整備します。
+GitHub Actionsはテスト・lint・CDK合成・E2Eを実行しますが、AWSへはデプロイしません。将来のCDKデプロイではAWS OIDC、環境承認、変更確認、ロールバック等を整備します。
 
 ## ⚠️ 対象範囲と安全上の注意
 

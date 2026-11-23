@@ -53,7 +53,6 @@ describe('Ollama LLM provider', () => {
     const provider = createOllamaProvider({ model: 'test-model', fetchImpl });
 
     const result = await provider.analyze({ chunks });
-    const request = JSON.parse(fetchImpl.mock.calls[0][1].body);
 
     expect(result.findings[0].evidence).toEqual(chunks[1]);
     expect(result.qualityRisks).toEqual(['停止条件が曖昧']);

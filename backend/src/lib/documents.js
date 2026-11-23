@@ -1,7 +1,8 @@
 const { GetCommand, PutCommand, ScanCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
 const { dynamo } = require('./aws');
+const { getResourceNames } = require('./resource-names');
 
-const TABLE = 'Documents';
+const TABLE = getResourceNames().documents;
 
 async function getDocument(id) {
   const result = await dynamo.send(new GetCommand({ TableName: TABLE, Key: { id } }));

@@ -5,7 +5,9 @@ const { s3 } = require('../lib/aws');
 const bucket = process.env.S3_BUCKET || 'manufacturing-documents';
 
 function browserFileUrl(signedUrl) {
-  const endpoint = new URL(process.env.AWS_ENDPOINT_URL || 'https://127.0.0.1:9297');
+  if (!process.env.AWS_ENDPOINT_URL) return signedUrl;
+
+  const endpoint = new URL(process.env.AWS_ENDPOINT_URL);
   if (!['localhost', '127.0.0.1', '::1'].includes(endpoint.hostname)) return signedUrl;
 
   const signed = new URL(signedUrl);

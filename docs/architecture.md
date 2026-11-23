@@ -125,12 +125,14 @@ sequenceDiagram
 
 | 項目 | 方針 | 状態 |
 | --- | --- | --- |
-| ☁️ IaC | AWS CDK（TypeScriptを想定）でAWSリソースを定義し、CloudFormation経由で構築 | 採用決定。CDKコードは未実装 |
+| ☁️ IaC | AWS CDK（TypeScript）でAWSリソースを定義し、CloudFormation経由で構築 | S3・4つのDynamoDB・SQSのFoundation Stackを実装。AWSデプロイは未実施 |
 | 🖥️ 実行基盤 | 単一EC2案とECS等を費用・運用要件で比較 | 未決。CDK採用とは独立して判断 |
 | 🔐 CI認証 | GitHub ActionsからAWS OIDCで一時認証 | 未実装。長期アクセスキーは使わない方針 |
 | 🧰 環境設定 | アプリ実行設定とインフラ構築設定を分離 | `.env.example`はローカル/アプリ実行用 |
 
-CDKで管理するAWSリソースの範囲は、実行基盤の決定後に確定します。候補にはVPC/セキュリティグループ、EC2またはECS、S3、DynamoDB、SQS/DLQ、Cognito、IAM、Secrets Manager、CloudWatchがあります。無料枠・月額目標との整合を確認してから構成を固めます。
+Foundation Stackは、非公開・暗号化したS3バケット、オンデマンド課金のDynamoDB 4テーブル、暗号化SQSキューを定義します。環境別のリソース名とCloudFormation outputsを生成し、アプリの`S3_BUCKET`、`*_TABLE_NAME`、`DOC_INGEST_QUEUE_URL`へ設定できます。データリソースはStack削除時に保持します。
+
+実行基盤を選ぶ前のため、VPC/セキュリティグループ、EC2またはECS、Cognito、アプリ用IAMロール、DLQ/再試行、バックアップ、監視アラームはまだ含めていません。これらは実行基盤、IdP、RPO/RTO、予算の決定後にStackへ追加します。
 
 ```mermaid
 sequenceDiagram
@@ -147,7 +149,7 @@ sequenceDiagram
     CFN-->>Actions: デプロイ結果
 ```
 
-上図は今後整備するデプロイ方式です。現行のGitHub Actionsはテスト・lint・E2Eのみで、CDK Bootstrap、AWS OIDCロール、CDKデプロイはいずれも未実装です。AWSアカウント/リージョンごとのBootstrap、最小権限、承認、変更差分の確認、ロールバックを設計します。
+上図は今後整備するデプロイ方式です。現行のGitHub Actionsはテスト・lint・E2E・CDK合成を行いますが、CDK Bootstrap、AWS OIDCロール、CDKデプロイはいずれも未実装です。AWSアカウント/リージョンごとのBootstrap、最小権限、承認、変更差分の確認、ロールバックを設計します。AWSアカウントがなくても`pnpm cdk:synth`、`pnpm cdk:test`、`pnpm cdk:typecheck`でローカル検証できます。
 
 `.env.example`の`AWS_REGION`や`AWS_ENDPOINT_URL`はアプリがAWS SDKで接続するための実行時設定です。ローカル既定リージョンは`us-east-1`、endpointはローカルEmulatorです。計画中の東京リージョン向けCDK設定やAWSデプロイ資格情報をここへ追加しません。
 
@@ -203,7 +205,7 @@ Node.js 26以上、pnpm 12以上、Dockerが必要です。スクリプトはAWS
 | 🧹 静的検査 | `pnpm lint` | Backend、Frontend、スクリプト、E2E |
 | 🖱️ UI E2E | `pnpm test:e2e` | ログイン、登録、根拠表示、設計レビュー、人の判断 |
 
-GitHub Actionsは手動実行、アプリ関連ファイルの変更時にテスト・lint・E2Eを行います。**AWSへのデプロイは行いません。** default branchのレポート公開にはGitHub Pagesを使います。実AWSへのCI/CDにはAWS OIDC、環境承認、デプロイ・ロールバック手順が別途必要です。
+GitHub Actionsは手動実行、アプリ/CDK関連ファイルの変更時にテスト・lint・CDK合成・E2Eを行います。**AWSへのデプロイは行いません。** default branchのレポート公開にはGitHub Pagesを使います。実AWSへのCI/CDにはAWS OIDC、環境承認、デプロイ・ロールバック手順が別途必要です。
 
 ## 🚧 現在の制約
 

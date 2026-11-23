@@ -10,3 +10,4 @@ unit-results.xml
 *.db
 *.db-shm
 *.db-wal
+cdk.out/
