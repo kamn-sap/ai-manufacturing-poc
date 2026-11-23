@@ -120,9 +120,10 @@ pnpm cdk:synth
 | --- | --- |
 | `pnpm test` | API、認証、検索、取り込み、LLMのユニットテスト |
 | `pnpm lint` | Backend、Frontend、スクリプト、E2Eの静的検査 |
+| `pnpm build` | Frontendの本番用ビルド |
 | `pnpm test:e2e` | 画面操作のE2Eテスト（外部サービスはテスト用スタブ） |
 
-GitHub Actionsはテスト・lint・CDK合成・E2Eを実行しますが、AWSへはデプロイしません。将来のCDKデプロイではAWS OIDC、環境承認、変更確認、ロールバック等を整備します。
+GitHub Actionsはテスト・lint・本番ビルド・CDK合成・E2Eを実行しますが、AWSへはデプロイしません。将来のCDKデプロイではAWS OIDC、環境承認、変更確認、ロールバック等を整備します。
 
 ## ⚠️ 対象範囲と安全上の注意
 

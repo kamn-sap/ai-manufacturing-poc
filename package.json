@@ -11,6 +11,7 @@
     "dev:local": "bash scripts/local-start.sh",
     "dev:api": "node --env-file-if-exists=.env --watch backend/src/server.js",
     "dev:web": "node node_modules/vite/bin/vite.js --host 0.0.0.0 --config vite.config.js frontend",
+    "build": "vite build --config vite.config.js frontend",
     "worker": "node --env-file-if-exists=.env backend/src/workers/ingestWorker.js",
     "aws:init": "node --env-file-if-exists=.env --import tsx scripts/init-aws-resources.ts",
     "cdk:synth": "cdk synth",

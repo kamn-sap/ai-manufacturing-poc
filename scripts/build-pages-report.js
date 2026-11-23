@@ -44,6 +44,7 @@ if (existsSync('playwright-report')) cpSync('playwright-report', e2eReportDirect
 const statuses = {
   unit: process.env.UNIT_STATUS || 'skipped',
   lint: process.env.LINT_STATUS || 'skipped',
+  build: process.env.BUILD_STATUS || 'skipped',
   cdk: process.env.CDK_STATUS || 'skipped',
   e2e: process.env.E2E_STATUS || 'skipped',
 };
@@ -74,7 +75,7 @@ const html = `<!doctype html>
     *{box-sizing:border-box}body{margin:0;padding:40px 18px}.wrap{max-width:980px;margin:auto}
     header{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:26px}
     h1{font-size:28px;letter-spacing:-.04em;margin:5px 0}.eyebrow{font-size:10px;font-weight:700;letter-spacing:.14em;color:#368260}
-    .meta{font-size:12px;color:#77837b}    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}
+    .meta{font-size:12px;color:#77837b}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px}
     .card,section{background:white;border:1px solid #e4eae5;border-radius:12px}
     .card{padding:18px}.card span:first-child{display:block;color:#78837c;font-size:12px}
     .badge{display:inline-flex;align-items:center;border-radius:30px;padding:5px 10px;font-weight:700;font-size:11px}
@@ -94,6 +95,7 @@ const html = `<!doctype html>
   <div class="cards">
     <div class="card"><span>ユニットテスト</span><strong class="badge ${badgeClass(statuses.unit)}">${labels[statuses.unit] || '不明'} · ${unitResults.tests}件</strong></div>
     <div class="card"><span>Lint</span><strong class="badge ${badgeClass(statuses.lint)}">${labels[statuses.lint] || '不明'}</strong></div>
+    <div class="card"><span>本番ビルド</span><strong class="badge ${badgeClass(statuses.build)}">${labels[statuses.build] || '不明'}</strong></div>
     <div class="card"><span>CDK合成</span><strong class="badge ${badgeClass(statuses.cdk)}">${labels[statuses.cdk] || '不明'}</strong></div>
     <div class="card"><span>Playwright E2E</span><strong class="badge ${badgeClass(statuses.e2e)}">${labels[statuses.e2e] || '不明'}</strong></div>
   </div>
