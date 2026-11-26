@@ -80,7 +80,10 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
       await expect(answerCard).toContainText(scenario.expectedTerms);
       await expect(page.getByRole('heading', { name: '引用元' })).toBeVisible();
       expect(citation).toBeDefined();
-      await expect(page.getByRole('link', { name: new RegExp(scenario.fileName) }))
+      const citationLink = page.locator('.citation-card')
+        .filter({ hasText: scenario.fileName })
+        .filter({ hasText: citation.section });
+      await expect(citationLink)
         .toHaveAttribute('href', `/documents#${citation.documentId}`);
     });
   }
