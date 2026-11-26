@@ -14,8 +14,8 @@ const scenarios = [
   {
     name: '始業前の確認項目',
     fileName: 'ollama-startup-work-instruction.md',
-    question: '作業を始める前に確認する項目を教えてください。',
-    expectedTerms: /周囲|工具|保護カバー|非常停止|油|水/,
+    question: '始業前に非常停止ボタンがどの状態であることを確認しますか？',
+    expectedTerms: /非常停止|解除/,
   },
   {
     name: '清掃・点検時の安全措置',
