@@ -19,7 +19,8 @@
     "cdk:typecheck": "tsc --noEmit -p infra/cdk/tsconfig.json",
     "test": "vitest run",
     "lint": "eslint backend/src frontend/src scripts e2e --max-warnings=0 && pnpm cdk:typecheck",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:ollama": "OLLAMA_E2E=1 PLAYWRIGHT_REUSE_SERVER=1 PLAYWRIGHT_BASE_URL=http://localhost:5173 playwright test"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1175.0",

@@ -45,7 +45,7 @@ export default function KnowledgeAssistant() {
     <div className="page-stack">
       <div className="page-heading">
         <div><p className="eyebrow">FIELD KNOWLEDGE</p><h1>ナレッジアシスタント</h1><p className="muted">登録資料を根拠に、現場の疑問を確認できます。</p></div>
-        <span className="ai-mode"><span /><Sparkles size={14} /> 決定的なMock AI</span>
+        <span className="ai-mode"><span /><Sparkles size={14} /> Ollama / Gemma 3 4B</span>
       </div>
       <div className="assistant-layout">
         <section className="chat-panel panel">

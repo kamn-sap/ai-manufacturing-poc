@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { extractDocument, splitIntoChunks } from './ingest.js';
-import { answerQuestion, analyzeDesign } from '../lib/llm.js';
 
 function createPdfFixture() {
   const stream = 'BT /F1 12 Tf 10 100 Td (Sample PDF text) Tj ET';
@@ -32,7 +31,6 @@ describe('document ingestion helpers', () => {
     expect(pages[0]).toMatchObject({ section: '本文', page: 1 });
     expect(pages[0].text).toContain('Sample PDF text');
   });
-
   it('splits Markdown by heading and keeps its page reference', () => {
     const chunks = splitIntoChunks([{
       section: '本文',
@@ -56,27 +54,5 @@ describe('document ingestion helpers', () => {
     expect(chunks.length).toBeGreaterThan(1);
     expect(Math.max(...chunks.map((chunk) => chunk.content.length))).toBeLessThanOrEqual(1100);
     expect(chunks.map((chunk) => chunk.content).join('')).toBe('a'.repeat(2400));
-  });
-});
-
-describe('deterministic mock LLM', () => {
-  it('returns the supplied evidence as answer citations', async () => {
-    process.env.LLM_PROVIDER = 'mock';
-    const chunks = [{ document_id: 'doc-1', section: '始業前確認', page: 1, content: '周囲を確認します。' }];
-    const result = await answerQuestion({ question: '点検方法は？', chunks });
-
-    expect(result.citations).toEqual(chunks);
-    expect(result.answer).toContain('点検方法は？');
-    expect(result.safetyNotes.length).toBeGreaterThan(0);
-  });
-
-  it('attaches source chunks to review candidates', async () => {
-    process.env.LLM_PROVIDER = 'mock';
-    const result = await analyzeDesign({
-      chunks: [{ document_id: 'design-1', section: '異常時', page: 3, content: '通信断を検知します。' }],
-    });
-
-    expect(result.findings[0].evidence.section).toBe('異常時');
-    expect(result.perspectives).toContain('安全性');
   });
 });

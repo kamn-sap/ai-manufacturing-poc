@@ -24,7 +24,7 @@ flowchart LR
     W --> EX[📄 テキスト抽出・分割]
     EX --> IDX[(🔎 SQLite FTS5)]
     API --> IDX
-    API --> LLM[✨ Mock / Ollama]
+    API --> LLM[✨ Ollama / Gemma 3 4B]
     API --> DDB[(🗂️ DynamoDB)]
 ```
 
@@ -36,7 +36,7 @@ sequenceDiagram
     participant UI as 🖥️ 画面
     participant API as 🔐 API
     participant Search as 🔎 FTS5検索
-    participant Model as ✨ Mock / Ollama
+    participant Model as ✨ Ollama / Gemma 3 4B
     User->>UI: 質問を入力
     UI->>API: 質問を送信
     API->>Search: 登録文書を検索
@@ -55,7 +55,8 @@ sequenceDiagram
 | --- | --- |
 | Node.js 26以上、pnpm 12以上 | アプリとWorkerの実行 |
 | Docker DesktopまたはDocker Engine | ローカルAWS Emulatorの実行 |
-| 空いているポート `9297`、`3000`、`5173` | Emulator、API、画面 |
+| Ollamaと `gemma3:4b` | ローカルLLM推論 |
+| 空いているポート `9297`、`3000`、`5173`、`11434` | Emulator、API、画面、Ollama |
 
 ### 起動手順
 
@@ -69,7 +70,7 @@ pnpm dev:local
 4. 初期ログインは `operator` / `change-me` です。ローカル開発専用の値なので、共有環境や公開環境では必ず変更してください。
 5. 終了するときは起動中のターミナルで `Ctrl+C` を押します。
 
-> 💡 既定値は `AUTH_PROVIDER=local`、`LLM_PROVIDER=mock` です。EmulatorのDynamoDB/S3/SQSはメモリ上にあるため、停止するとデータが消えます。実AWSの認証情報はローカル起動に使いません。
+> 💡 既定値は `AUTH_PROVIDER=local`、`LLM_PROVIDER=ollama` です。Ollamaが起動しておらず `gemma3:4b` が取得されていない場合、質問・設計レビューは利用できません。EmulatorのDynamoDB/S3/SQSはメモリ上にあるため、停止するとデータが消えます。実AWSの認証情報はローカル起動に使いません。
 
 ### 🛠️ 手動で起動する場合
 
@@ -98,7 +99,7 @@ pnpm dev
 | 設定 | 既定値 | 切り替え先 | 注意点 |
 | --- | --- | --- | --- |
 | `AUTH_PROVIDER` | `local` | `cognito` | CognitoではUser Pool等の設定とユーザー登録が必要。MFA等の追加チャレンジは現在のログイン画面では完了できません |
-| `LLM_PROVIDER` | `mock` | `ollama` | Ollamaはloopback/private IPに限定。モデル品質、応答時間、必要メモリを事前評価してください |
+| `LLM_PROVIDER` | `ollama` | なし | Ollamaはloopback/private IPに限定。既定モデルは `gemma3:4b` |
 | 検索 | SQLite FTS5 | 現状、設定切替なし | 検索Providerの差し替えには別実装とデータ移行が必要 |
 | 保存・キュー | AWS SDK | `AWS_ENDPOINT_URL`等で接続先選択 | Emulatorと実AWSの切替は可能ですが、本番用IaC・IAM・環境分離は別途必要 |
 
@@ -122,14 +123,17 @@ pnpm cdk:synth
 | `pnpm lint` | Backend、Frontend、スクリプト、E2Eの静的検査 |
 | `pnpm build` | Frontendの本番用ビルド |
 | `pnpm test:e2e` | 画面操作のE2Eテスト（外部サービスはテスト用スタブ） |
+| `pnpm test:e2e:ollama` | AWS Emulator・API・Worker・Gemma 3 4Bを通した文書登録・質問E2E |
 
-GitHub Actionsはテスト・lint・本番ビルド・CDK合成・E2Eを実行しますが、AWSへはデプロイしません。将来のCDKデプロイではAWS OIDC、環境承認、変更確認、ロールバック等を整備します。
+ローカルではOllamaを起動して `gemma3:4b` を取得し、別ターミナルで `pnpm dev:local` を起動した状態で `pnpm test:e2e:ollama` を実行します。公式AWS Emulator上のDynamoDB・S3・SQS、実API、取り込みWorker、SQLite FTS5検索、Gemma回答までを通して、異音対応・始業前確認・清掃前の安全措置を検証します。回答JSONと動画はPlaywrightレポートに保存され、`pnpm exec playwright show-report` でViewerを開けます。通常の `pnpm test:e2e` は従来どおりAPIスタブを使う高速な画面テストです。
+
+GitHub Actionsはテスト・lint・本番ビルド・CDK合成・E2Eを実行しますが、実AWSへはデプロイしません。E2Eでは公式AWS Emulator、Ollama/Gemma 3 4B、API、Workerを起動して実運用に近い登録・検索・回答フローを検証します。将来の実AWSデプロイではAWS OIDC、環境承認、変更確認、ロールバック等を整備します。
 
 ## ⚠️ 対象範囲と安全上の注意
 
 - このPoCは全文検索（SQLite FTS5）を使います。ベクトル検索、OCR、動画文字起こし、図面解析は行いません。
 - 対応ファイルはTXT、Markdown、PDF、DOCX、XLSXです。画像だけのPDF等、文字を抽出できない資料は別途確認が必要です。
-- 既定のMockは再現可能なテスト用応答です。Ollama利用時も、出力の品質や正確性を保証するものではありません。
+- Ollama利用時も、出力の品質や正確性を保証するものではありません。
 - AI回答は参考情報です。安全作業は承認済みの最新版文書と現場の手順を確認してください。設計の最終判断は担当者が行ってください。
 - 現在の文書・レビュー領域は共有ワークスペースです。ログインを分けても、文書ごとの権限分離は行われません。
 

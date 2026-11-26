@@ -43,7 +43,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     outputs:
       report-artifact-id: ${{ steps.upload-report.outputs.artifact-id }}
     steps:
@@ -96,10 +96,66 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
         continue-on-error: true
 
+      - name: Setup Ollama
+        id: ollama-setup
+        if: always() && steps.install.outcome == 'success'
+        uses: ai-action/setup-ollama@v2
+        env:
+          OLLAMA_CONTEXT_LENGTH: 8192
+        continue-on-error: true
+
+      - name: Pull Gemma 3 4B
+        id: ollama-pull
+        if: always() && steps.ollama-setup.outcome == 'success'
+        env:
+          OLLAMA_MODEL: gemma3:4b
+        run: ollama pull "$OLLAMA_MODEL"
+        continue-on-error: true
+
       - name: End-to-end tests
         id: e2e
-        if: always() && steps.install.outcome == 'success' && steps.browser.outcome == 'success'
-        run: pnpm test:e2e
+        if: always() && steps.install.outcome == 'success' && steps.browser.outcome == 'success' && steps.ollama-pull.outcome == 'success'
+        env:
+          LLM_PROVIDER: ollama
+          OLLAMA_MODEL: gemma3:4b
+          OLLAMA_BASE_URL: http://127.0.0.1:11434
+          OLLAMA_TIMEOUT_MS: 120000
+        run: |
+          set -euo pipefail
+          log_file="$RUNNER_TEMP/dev-local.log"
+          pnpm dev:local >"$log_file" 2>&1 &
+          app_pid=$!
+          cleanup() {
+            kill "$app_pid" 2>/dev/null || true
+            wait "$app_pid" 2>/dev/null || true
+            docker rm -f ai-manufacturing-poc-emulator >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          ready=false
+          for _ in $(seq 1 180); do
+            ui_status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:5173/ || true)
+            api_status=$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:3000/api/knowledge || true)
+            if [[ "$ui_status" == "200" && "$api_status" == "401" ]]; then
+              ready=true
+              break
+            fi
+            if ! kill -0 "$app_pid" 2>/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          if [[ "$ready" != "true" ]]; then
+            tail -n 100 "$log_file"
+            echo "::error::The local app and AWS Emulator did not become ready."
+            exit 1
+          fi
+
+          if ! pnpm test:e2e:ollama; then
+            tail -n 120 "$log_file"
+            exit 1
+          fi
         continue-on-error: true
 
       - name: Build Pages report
@@ -110,6 +166,7 @@ jobs:
           BUILD_STATUS: ${{ steps.build.outcome || 'skipped' }}
           CDK_STATUS: ${{ steps.cdk.outcome || 'skipped' }}
           E2E_STATUS: ${{ steps.e2e.outcome || 'skipped' }}
+          OLLAMA_STATUS: ${{ steps.e2e.outcome || 'skipped' }}
         run: node scripts/build-pages-report.js
 
       - name: Upload report artifact
@@ -132,8 +189,10 @@ jobs:
           CDK_STATUS: ${{ steps.cdk.outcome || 'skipped' }}
           BROWSER_STATUS: ${{ steps.browser.outcome || 'skipped' }}
           E2E_STATUS: ${{ steps.e2e.outcome || 'skipped' }}
+          OLLAMA_SETUP_STATUS: ${{ steps.ollama-setup.outcome || 'skipped' }}
+          OLLAMA_PULL_STATUS: ${{ steps.ollama-pull.outcome || 'skipped' }}
         run: |
-          if [[ "$INSTALL_STATUS" != "success" || "$UNIT_STATUS" != "success" || "$LINT_STATUS" != "success" || "$BUILD_STATUS" != "success" || "$CDK_STATUS" != "success" || "$BROWSER_STATUS" != "success" || "$E2E_STATUS" != "success" ]]; then
+          if [[ "$INSTALL_STATUS" != "success" || "$UNIT_STATUS" != "success" || "$LINT_STATUS" != "success" || "$BUILD_STATUS" != "success" || "$CDK_STATUS" != "success" || "$BROWSER_STATUS" != "success" || "$E2E_STATUS" != "success" || "$OLLAMA_SETUP_STATUS" != "success" || "$OLLAMA_PULL_STATUS" != "success" ]]; then
             echo "::error::One or more validation checks failed."
             exit 1
           fi

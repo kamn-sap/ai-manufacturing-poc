@@ -41,7 +41,13 @@ docker run --detach --name "${CONTAINER_NAME}" \
   --volume "${EMULATOR_DIR}:/home/emulator/.aws/emulator" \
   "${IMAGE_NAME}" -p 9297
 
+APP_PID=
 cleanup() {
+  trap - EXIT INT TERM
+  if [[ -n "${APP_PID}" ]] && kill -0 "${APP_PID}" 2>/dev/null; then
+    kill "${APP_PID}" 2>/dev/null || true
+    wait "${APP_PID}" 2>/dev/null || true
+  fi
   docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT INT TERM
@@ -96,4 +102,6 @@ pnpm aws:init
 
 echo "Starting app: http://localhost:5173"
 echo "Press Ctrl+C to stop the app and Emulator."
-pnpm exec concurrently -k -n app,worker -c blue,green "pnpm dev" "pnpm worker"
+pnpm exec concurrently -k -n app,worker -c blue,green "pnpm dev" "pnpm worker" &
+APP_PID=$!
+wait "${APP_PID}"

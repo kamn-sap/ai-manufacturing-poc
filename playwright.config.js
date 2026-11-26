@@ -8,7 +8,7 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173',
     video: 'on',
     ...devices['Desktop Chrome'],
   },
@@ -16,7 +16,7 @@ export default defineConfig({
     command: '../node_modules/.bin/vite --host 127.0.0.1 --config ../vite.config.js',
     cwd: 'frontend',
     url: 'http://127.0.0.1:5173',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI || process.env.PLAYWRIGHT_REUSE_SERVER === '1',
     timeout: 60_000,
   },
 });

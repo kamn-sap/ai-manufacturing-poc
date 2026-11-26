@@ -47,6 +47,7 @@ const statuses = {
   build: process.env.BUILD_STATUS || 'skipped',
   cdk: process.env.CDK_STATUS || 'skipped',
   e2e: process.env.E2E_STATUS || 'skipped',
+  ollama: process.env.OLLAMA_STATUS || 'skipped',
 };
 if (!existsSync(`${e2eReportDirectory}/index.html`)) {
   writeFileSync(`${e2eReportDirectory}/index.html`, `<!doctype html><html lang="ja"><meta charset="utf-8"><title>E2Eレポート</title><body><h1>E2Eレポートは生成されませんでした</h1><p>実行状態: ${escapeHtml(statuses.e2e)}</p><p>GitHub ActionsログでブラウザーのセットアップとE2E実行状況を確認してください。</p></body></html>`);
@@ -98,6 +99,7 @@ const html = `<!doctype html>
     <div class="card"><span>本番ビルド</span><strong class="badge ${badgeClass(statuses.build)}">${labels[statuses.build] || '不明'}</strong></div>
     <div class="card"><span>CDK合成</span><strong class="badge ${badgeClass(statuses.cdk)}">${labels[statuses.cdk] || '不明'}</strong></div>
     <div class="card"><span>Playwright E2E</span><strong class="badge ${badgeClass(statuses.e2e)}">${labels[statuses.e2e] || '不明'}</strong></div>
+    <div class="card"><span>Ollama Gemma 3 4B</span><strong class="badge ${badgeClass(statuses.ollama)}">${labels[statuses.ollama] || '不明'}</strong></div>
   </div>
   <section><h2>E2E結果と録画</h2><p class="note">Playwrightの詳細レポートでは、テストごとの実行結果・スクリーンショット・録画動画を参照できます。</p><div class="links"><a class="link" href="./e2e/index.html">E2Eレポートを開く（動画あり）</a>${unitResults.tests ? '<a class="link" href="./unit-results.xml">UT JUnit結果</a>' : ''}</div></section>
   <section><h2>ユニットテスト一覧</h2>${testRows ? `<table><thead><tr><th>Suite</th><th>テスト</th><th>結果</th></tr></thead><tbody>${testRows}</tbody></table>` : '<p class="note">ユニットテスト結果を取得できませんでした。Actionsログを確認してください。</p>'}</section>

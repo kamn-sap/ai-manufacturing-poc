@@ -18,7 +18,7 @@ flowchart LR
     WORKER --> EXTRACT[📄 抽出・チャンク化]
     EXTRACT --> FTS[(🔎 SQLite FTS5)]
     API -->|検索| FTS
-    API -->|検索結果 + 質問| LLM[✨ Mock / Ollama]
+    API -->|検索結果 + 質問| LLM[✨ Ollama / Gemma 3 4B]
     API -->|回答 + 引用| FE
 ```
 
@@ -32,7 +32,7 @@ flowchart LR
 | 🪣 オブジェクト保存 | 元文書の保存・取得 | S3と短時間の署名付きURL |
 | 🗂️ メタデータ | 文書、レビュー、ローカル利用者 | DynamoDB |
 | 🔎 全文検索 | 文書チャンクの検索 | SQLite FTS5、trigram tokenizer |
-| ✨ 回答・レビュー生成 | 検索結果を使った回答や指摘候補 | 決定的Mock、またはOllama adapter |
+| ✨ 回答・レビュー生成 | 検索結果を使った回答や指摘候補 | Ollama adapter（Gemma 3 4B） |
 
 ## 📥 文書登録から検索可能になるまで
 
@@ -77,7 +77,7 @@ sequenceDiagram
     participant UI as 🖥️ ナレッジアシスタント
     participant API as 🔐 API
     participant FTS as 🔎 SQLite FTS5
-    participant LLM as ✨ Mock / Ollama
+    participant LLM as ✨ Ollama / Gemma 3 4B
     User->>UI: 質問を入力
     UI->>API: JWT付きで質問
     API->>FTS: 関連する文書チャンクを検索
@@ -99,7 +99,7 @@ sequenceDiagram
     participant UI as 🖥️ 設計レビュー
     participant API as 🔐 API
     participant FTS as 🔎 SQLite FTS5
-    participant LLM as ✨ Mock / Ollama
+    participant LLM as ✨ Ollama / Gemma 3 4B
     participant DDB as 🗂️ DynamoDB
     Reviewer->>UI: 取り込み済み設計書を選択
     UI->>API: レビュー開始
@@ -120,7 +120,7 @@ sequenceDiagram
 | 領域 | 設定・境界 | 選択できるもの | まだできないこと |
 | --- | --- | --- | --- |
 | 🪪 認証 | `AUTH_PROVIDER` | `local` / `cognito` | Cognito MFA等の追加challengeを現在の画面で完了する |
-| ✨ LLM | `LLM_PROVIDER` | `mock` / `ollama` | Copilot CLIを利用者向け推論APIとして使う、Bedrockへ切り替える |
+| ✨ LLM | `LLM_PROVIDER=ollama` | Ollama（Gemma 3 4B） | 別のローカル/閉域モデルへ切り替える |
 | 🔎 検索 | `createSearchProvider(database)` | SQLite FTS5のDB注入 | 設定値だけで検索エンジンを別製品へ切替 |
 | 🗂️ 保存・キュー | AWS SDK設定 | Emulator / 実AWSの接続先 | 保存基盤全体の抽象化や自動データ移行 |
 
@@ -165,10 +165,10 @@ sequenceDiagram
 
 ### ✨ LLM
 
-- `mock` は決定的なテンプレート出力で、既定の開発・テスト設定です。
-- `ollama` は `OLLAMA_BASE_URL`、`OLLAMA_MODEL`、`OLLAMA_TIMEOUT_MS` で設定します。接続先はloopback/private IPに限定され、外部ホスト名は拒否されます。
+- `ollama` は唯一のLLM Providerです。`OLLAMA_BASE_URL`、`OLLAMA_MODEL`、`OLLAMA_TIMEOUT_MS` で設定します。既定モデルは `gemma3:4b`、接続先はloopback/private IPに限定され、外部ホスト名は拒否されます。
 - モデルに引用を自由生成させず、検索で取得したチャンクに引用範囲を固定します。
 - 実モデルの品質、日本語性能、応答時間、必要メモリ、同時実行時の費用は未検証です。文書を外部へ送らない評価環境で確認してください。
+- `pnpm test:e2e:ollama` とアプリ検証/E2EのGitHub Actionsでは、公式AWS Emulator、API、Workerを起動し、文書登録からS3保存、SQS取り込み、SQLite FTS5検索、Ollama ProviderによるGemma 3 4B回答までを通します。異音対応・始業前確認・清掃前の安全措置の3シナリオを検証し、回答JSONと動画をPlaywright Viewerに記録します。AWS Emulatorはローカル検証用で、実AWSへのデプロイや本番環境との完全同等性を保証するものではありません。
 
 ## 💾 データと永続性
 
