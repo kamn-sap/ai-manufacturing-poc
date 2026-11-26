@@ -89,6 +89,6 @@ pnpm dev:local
 ## 🧠 このPoCの前提
 
 - 既定のLLMはGemma 3 4Bを提供するOllamaです。Ollamaが起動しておらず、`gemma3:4b` が取得されていない場合は利用できません。
-- Ollama応答のE2Eをローカルで試す場合は、Ollamaを起動して `gemma3:4b` を取得し、別ターミナルで `pnpm dev:local` を起動してから `pnpm test:e2e:ollama` を実行します。公式AWS Emulator上のS3/DynamoDB/SQS、API、Worker、SQLite FTS5検索を経由します。回答JSONと動画を確認するには `pnpm exec playwright show-report` を実行します。
+- Ollama応答のE2Eをローカルで試す場合は、Ollamaを起動して `gemma3:4b` を取得し、別ターミナルで `pnpm dev:local` を起動してから `pnpm test:e2e:ollama` を実行します。公式AWS Emulator上のS3/DynamoDB/SQS、API、Worker、SQLite FTS5検索を経由します。回答JSONと動画を確認するには `pnpm exec playwright show-report` を実行します。動画は回答表示後に回答欄へスクロールし、ローディング終了後の回答本文を2秒間表示してから終わります。
 - ログインユーザーが異なっても、文書とレビューは共有ワークスペースです。文書ごとの権限分離はありません。
 - このアプリは本番運用向けの監視、バックアップ、可用性、アクセス制御を備えた完成システムではありません。

@@ -125,7 +125,7 @@ pnpm cdk:synth
 | `pnpm test:e2e` | 画面操作のE2Eテスト（外部サービスはテスト用スタブ） |
 | `pnpm test:e2e:ollama` | AWS Emulator・API・Worker・Gemma 3 4Bを通した文書登録・質問E2E |
 
-ローカルではOllamaを起動して `gemma3:4b` を取得し、別ターミナルで `pnpm dev:local` を起動した状態で `pnpm test:e2e:ollama` を実行します。公式AWS Emulator上のDynamoDB・S3・SQS、実API、取り込みWorker、SQLite FTS5検索、Gemma回答までを通して、異音対応・始業前確認・清掃前の安全措置を検証します。回答JSONと動画はPlaywrightレポートに保存され、`pnpm exec playwright show-report` でViewerを開けます。通常の `pnpm test:e2e` は従来どおりAPIスタブを使う高速な画面テストです。
+ローカルではOllamaを起動して `gemma3:4b` を取得し、別ターミナルで `pnpm dev:local` を起動した状態で `pnpm test:e2e:ollama` を実行します。公式AWS Emulator上のDynamoDB・S3・SQS、実API、取り込みWorker、SQLite FTS5検索、Gemma回答までを通して、異音対応・始業前確認・清掃前の安全措置を検証します。回答JSONと動画はPlaywrightレポートに保存され、`pnpm exec playwright show-report` でViewerを開けます。動画は回答生成後に回答欄を画面内へスクロールし、ローディング表示が消えて回答本文が見える状態を2秒保持してから終了します。通常の `pnpm test:e2e` は従来どおりAPIスタブを使う高速な画面テストです。
 
 GitHub Actionsはテスト・lint・本番ビルド・CDK合成・E2Eを実行しますが、実AWSへはデプロイしません。E2Eでは公式AWS Emulator、Ollama/Gemma 3 4B、API、Workerを起動して実運用に近い登録・検索・回答フローを検証します。将来の実AWSデプロイではAWS OIDC、環境承認、変更確認、ロールバック等を整備します。
 

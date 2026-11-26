@@ -78,6 +78,10 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
       const answerCard = page.locator('.answer-summary');
       await expect(answerCard).toBeVisible();
       await expect(answerCard).toContainText(scenario.expectedTerms);
+      await expect(page.locator('.thinking')).toHaveCount(0);
+      await answerCard.scrollIntoViewIfNeeded();
+      await expect(answerCard).toBeInViewport();
+      await page.waitForTimeout(2_000);
       await expect(page.getByRole('heading', { name: '引用元' })).toBeVisible();
       expect(citation).toBeDefined();
       const citationLink = page.locator('.citation-card')
