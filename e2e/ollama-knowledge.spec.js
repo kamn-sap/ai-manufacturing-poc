@@ -17,7 +17,7 @@ const scenarios = [
     fileName: 'ollama-startup-work-instruction.md',
     fixturePath: '../fixtures/ollama-startup-work-instruction.md',
     section: '始業前確認',
-    question: '始業前確認の3番目の項目で、ボタンがどの状態であることを確認しますか？',
+    question: '始業前確認の3番目の確認内容を教えてください。',
     expectedTerms: /非常停止|解除/,
   },
   {
@@ -66,9 +66,6 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
       const modelAnswer = await response.json();
       const elapsedMs = Math.round(performance.now() - startedAt);
       const citation = modelAnswer.citations.find((item) => item.documentName === scenario.fileName);
-      expect(modelAnswer.answer).toMatch(scenario.expectedTerms);
-      expect(new Set(modelAnswer.citations.map((item) => item.documentName))).toEqual(new Set([scenario.fileName]));
-      expect(citation?.section).toBe(scenario.section);
 
       await test.info().attach('gemma-response.json', {
         body: Buffer.from(JSON.stringify({
@@ -87,6 +84,10 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
         }, null, 2)),
         contentType: 'application/json',
       });
+
+      expect(modelAnswer.answer).toMatch(scenario.expectedTerms);
+      expect(new Set(modelAnswer.citations.map((item) => item.documentName))).toEqual(new Set([scenario.fileName]));
+      expect(citation?.section).toBe(scenario.section);
 
       const answerCard = page.locator('.answer-summary');
       await expect(answerCard).toBeVisible();
