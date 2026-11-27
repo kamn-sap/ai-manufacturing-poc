@@ -62,7 +62,7 @@ export default function DesignReview() {
     <div className="page-stack">
       <div className="page-heading">
         <div><p className="eyebrow">AI-ASSISTED QUALITY</p><h1>設計レビュー</h1><p className="muted">設計書から確認観点と指摘候補を抽出します。採否は必ず人が判断します。</p></div>
-        <span className="review-mode"><Sparkles size={15} />候補生成 · Mock AI</span>
+        <span className="review-mode"><Sparkles size={15} />候補生成 · ローカルLLM</span>
       </div>
       <div className="review-banner"><div className="banner-shield"><Shield size={20} /></div><div><strong>AIは「指摘候補」を提示します</strong><span>出力は確定指摘ではありません。根拠を確認し、人が採用・却下・修正を記録してください。</span></div><span className="human-review-tag">HUMAN REVIEW</span></div>
 
@@ -78,7 +78,7 @@ export default function DesignReview() {
           ))}
           {!readyDocuments.length && <div className="empty-state compact"><FileText size={23} /><strong>レビューできる文書がありません</strong><span>文書ライブラリで設計書を登録し、取り込み完了をお待ちください。</span></div>}
         </div>
-        <div className="review-action"><div className="review-action-note"><FlaskConical size={16} />結果は再現可能なMock AIで生成されます。</div><button className="button button-primary" onClick={analyze} disabled={!selected.length || busy}>{busy ? <><span className="button-spinner" />分析中…</> : <><Sparkles size={16} />レビューを実行</>}</button></div>
+        <div className="review-action"><div className="review-action-note"><FlaskConical size={16} />登録済み設計文書をローカルLLMで分析します。</div><button className="button button-primary" onClick={analyze} disabled={!selected.length || busy}>{busy ? <><span className="button-spinner" />分析中…</> : <><Sparkles size={16} />レビューを実行</>}</button></div>
         {error && <p className="form-error" role="alert">{error}</p>}
       </section>
 

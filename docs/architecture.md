@@ -168,7 +168,7 @@ sequenceDiagram
 - `ollama` は唯一のLLM Providerです。`OLLAMA_BASE_URL`、`OLLAMA_MODEL`、`OLLAMA_TIMEOUT_MS` で設定します。既定モデルは `gemma3:4b`、接続先はloopback/private IPに限定され、外部ホスト名は拒否されます。
 - モデルに引用を自由生成させず、検索で取得したチャンクに引用範囲を固定します。
 - 実モデルの品質、日本語性能、応答時間、必要メモリ、同時実行時の費用は未検証です。文書を外部へ送らない評価環境で確認してください。
-- `pnpm test:e2e:ollama` とアプリ検証/E2EのGitHub Actionsでは、公式AWS Emulator、API、Workerを起動し、文書登録からS3保存、SQS取り込み、SQLite FTS5検索、Ollama ProviderによるGemma 3 4B回答までを通します。異音対応・始業前確認・清掃前の安全措置の3シナリオを検証し、回答JSON・結果画面のスクリーンショット・動画をPlaywright Viewerに記録します。録画とスクリーンショットは1280 x 720で、動画は回答表示後に回答欄を画面内へスクロールして2秒間保持します。AIの回答文は完全一致で判定せず、回答の存在と引用元文書・節・抜粋の対応をCIで検証し、実際の回答と画像を[操作マニュアル](./user-manual.md)に掲載します。AWS Emulatorはローカル検証用で、実AWSへのデプロイや本番環境との完全同等性を保証するものではありません。
+- `pnpm test:e2e:ollama` とアプリ検証/E2EのGitHub Actionsでは、公式AWS Emulator、API、Workerを起動し、文書登録からS3保存、SQS取り込み、SQLite FTS5検索、Ollama ProviderによるGemma 3 4B回答までを通します。質問応答の3シナリオに加えて、設計書を登録し、取り込み完了後に設計レビューを実行し、指摘候補の根拠を確認して人の判断を記録するシナリオを検証します。回答JSON・レビューJSON・結果画面のスクリーンショット・動画をPlaywright Viewerに記録します。録画とスクリーンショットは1280 x 720で、各結果を表示した後に2秒間保持します。AIの出力文は完全一致で判定せず、結果の存在・引用根拠と登録文書との対応を検証し、実際の回答と画像を[操作マニュアル](./user-manual.md)に掲載します。AWS Emulatorはローカル検証用で、実AWSへのデプロイや本番環境との完全同等性を保証するものではありません。
 
 ## 💾 データと永続性
 

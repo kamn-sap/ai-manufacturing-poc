@@ -79,7 +79,7 @@ function ProtectedApp({ username, onLogout }) {
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="environment-tag"><span /> MOCK AI · TEST MODE</div>
+          <div className="environment-tag"><span /> LOCAL LLM · TEST MODE</div>
           <button className="nav-link logout-button" onClick={logout}><LogOut size={18} />ログアウト</button>
           <div className="user-card"><div className="avatar">{initials}</div><div><strong>{username}</strong><small>ナレッジ利用者</small></div><span className="user-online" /></div>
         </div>
