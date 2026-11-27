@@ -8,9 +8,10 @@ export default defineConfig({
     ['html', { outputFolder: 'playwright-report', open: 'never' }],
   ],
   use: {
-    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173',
-    video: 'on',
     ...devices['Desktop Chrome'],
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://127.0.0.1:5173',
+    viewport: { width: 1280, height: 720 },
+    video: { mode: 'on', size: { width: 1280, height: 720 } },
   },
   webServer: {
     command: '../node_modules/.bin/vite --host 127.0.0.1 --config ../vite.config.js',

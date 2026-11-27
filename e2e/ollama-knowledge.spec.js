@@ -1,25 +1,30 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-const sample = readFileSync(new URL('../fixtures/work-instruction.md', import.meta.url), 'utf8');
 const model = process.env.OLLAMA_MODEL || 'gemma3:4b';
 
 const scenarios = [
   {
     name: '異音・振動の異常対応',
     fileName: 'ollama-noise-work-instruction.md',
-    question: '設備から異音がした場合の対応を教えてください。',
+    fixturePath: '../fixtures/ollama-noise-work-instruction.md',
+    section: '異音が発生した場合',
+    question: '設備の異音や異常な振動が発生した際、原因を特定する前に行う対応は何ですか？',
     expectedTerms: /停止|止め|再起動|設備責任者/,
   },
   {
     name: '始業前の確認項目',
     fileName: 'ollama-startup-work-instruction.md',
-    question: '始業前に非常停止ボタンがどの状態であることを確認しますか？',
+    fixturePath: '../fixtures/ollama-startup-work-instruction.md',
+    section: '始業前確認',
+    question: '始業前確認の3番目の項目で、ボタンがどの状態であることを確認しますか？',
     expectedTerms: /非常停止|解除/,
   },
   {
     name: '清掃・点検時の安全措置',
     fileName: 'ollama-safety-work-instruction.md',
+    fixturePath: '../fixtures/ollama-safety-work-instruction.md',
+    section: '安全上の注意',
     question: '点検や清掃を始める前に必要な安全措置は何ですか？',
     expectedTerms: /電源|遮断|ロックアウト|作業標準書/,
   },
@@ -32,6 +37,7 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
   for (const scenario of scenarios) {
     test(scenario.name, async ({ page }) => {
       test.setTimeout(180_000);
+      const documentContent = readFileSync(new URL(scenario.fixturePath, import.meta.url), 'utf8');
 
       await page.goto('/');
       await page.getByLabel('ユーザー名').fill('operator');
@@ -41,7 +47,7 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
       await page.locator('input[type="file"]').setInputFiles({
         name: scenario.fileName,
         mimeType: 'text/markdown',
-        buffer: Buffer.from(sample),
+        buffer: Buffer.from(documentContent),
       });
       const documentRow = page.locator('.document-row').filter({ hasText: scenario.fileName });
       await expect(documentRow).toBeVisible();
@@ -60,11 +66,18 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
       const modelAnswer = await response.json();
       const elapsedMs = Math.round(performance.now() - startedAt);
       const citation = modelAnswer.citations.find((item) => item.documentName === scenario.fileName);
+      expect(modelAnswer.answer).toMatch(scenario.expectedTerms);
+      expect(new Set(modelAnswer.citations.map((item) => item.documentName))).toEqual(new Set([scenario.fileName]));
+      expect(citation?.section).toBe(scenario.section);
 
       await test.info().attach('gemma-response.json', {
         body: Buffer.from(JSON.stringify({
           model,
           scenario: scenario.name,
+          registeredDocument: {
+            fileName: scenario.fileName,
+            content: documentContent,
+          },
           question: scenario.question,
           elapsedMs,
           answer: modelAnswer.answer,
@@ -81,6 +94,14 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
       await expect(page.locator('.thinking')).toHaveCount(0);
       await answerCard.scrollIntoViewIfNeeded();
       await expect(answerCard).toBeInViewport();
+      await test.info().attach('gemma-result-screen.png', {
+        body: await page.screenshot(),
+        contentType: 'image/png',
+      });
+      await test.info().attach('gemma-answer-card.png', {
+        body: await page.locator('.answer-card').screenshot(),
+        contentType: 'image/png',
+      });
       await page.waitForTimeout(2_000);
       await expect(page.getByRole('heading', { name: '引用元' })).toBeVisible();
       expect(citation).toBeDefined();
