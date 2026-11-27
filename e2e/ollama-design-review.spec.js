@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 
 const model = process.env.OLLAMA_MODEL || 'gemma3:4b';
 const documentContent = readFileSync(new URL('../fixtures/ollama-design-review.md', import.meta.url), 'utf8');
-const evidenceSections = ['安全停止', '温度監視', '通信異常'];
+const evidenceSections = ['検査判定', '承認フロー', '履歴記録'];
 
 test.describe('Ollama Gemma 3 4B document library and design review E2E', () => {
   test.skip(!process.env.OLLAMA_E2E, 'Set OLLAMA_E2E=1 to run real-model E2E scenarios');
@@ -61,7 +61,7 @@ test.describe('Ollama Gemma 3 4B document library and design review E2E', () => 
     await page.getByRole('link', { name: '設計レビュー' }).click();
     const reviewDocument = page.locator('.review-doc-option').filter({ hasText: fileName });
     await expect(reviewDocument).toBeVisible();
-    await reviewDocument.locator('input[type="checkbox"]').check();
+    await reviewDocument.getByText(fileName, { exact: true }).click();
     await expect(reviewDocument.locator('input[type="checkbox"]')).toBeChecked();
 
     const startedAt = performance.now();
