@@ -10,7 +10,7 @@ const scenarios = [
     fixturePath: '../fixtures/ollama-noise-work-instruction.md',
     section: '異音が発生した場合',
     question: '設備の異音や異常な振動が発生した際、原因を特定する前に行う対応は何ですか？',
-    expectedTerms: /停止|止め|再起動|設備責任者/,
+    expectedTerms: /(?=.*緊急停止)(?=.*設備責任者)(?=.*再起動しません)/,
   },
   {
     name: '始業前の確認項目',
@@ -18,7 +18,9 @@ const scenarios = [
     fixturePath: '../fixtures/ollama-startup-work-instruction.md',
     section: '始業前確認',
     question: '始業前の確認で、解除されている必要があるものは何ですか？',
-    expectedTerms: /非常停止|解除/,
+    expectedTerms: /(?=.*非常停止ボタン)(?=.*解除)/,
+    forbiddenStepTerms: /evidence|抽出|分析/i,
+    forbiddenSafetyTerms: /危険な状態|危険性/,
   },
   {
     name: '清掃・点検時の安全措置',
@@ -26,7 +28,7 @@ const scenarios = [
     fixturePath: '../fixtures/ollama-safety-work-instruction.md',
     section: '安全上の注意',
     question: '点検や清掃を始める前に必要な安全措置は何ですか？',
-    expectedTerms: /電源|遮断|ロックアウト|作業標準書/,
+    expectedTerms: /(?=.*電源を遮断)(?=.*ロックアウト)(?=.*作業標準書)/,
   },
 ];
 
@@ -88,6 +90,12 @@ test.describe('Ollama Gemma 3 4B knowledge E2E', () => {
       expect(modelAnswer.answer).toMatch(scenario.expectedTerms);
       expect(new Set(modelAnswer.citations.map((item) => item.documentName))).toEqual(new Set([scenario.fileName]));
       expect(citation?.section).toBe(scenario.section);
+      if (scenario.forbiddenStepTerms) {
+        expect(modelAnswer.steps.join('\n')).not.toMatch(scenario.forbiddenStepTerms);
+      }
+      if (scenario.forbiddenSafetyTerms) {
+        expect(modelAnswer.safetyNotes.join('\n')).not.toMatch(scenario.forbiddenSafetyTerms);
+      }
 
       const answerCard = page.locator('.answer-summary');
       await expect(answerCard).toBeVisible();
