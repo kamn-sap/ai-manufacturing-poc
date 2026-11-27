@@ -9,8 +9,8 @@ const scenarios = [
     fileName: 'ollama-noise-work-instruction.md',
     fixturePath: '../fixtures/ollama-noise-work-instruction.md',
     section: '異音が発生した場合',
-    question: '設備の異音や異常な振動が発生した際、原因を特定する前に行う対応は何ですか？',
-    expectedTerms: /(?=.*緊急停止)(?=.*設備責任者)(?=.*再起動しません)/,
+    question: '設備で異音や異常な振動が発生した際の初動と、再起動できる条件を教えてください。',
+    expectedTerms: /(?=.*緊急停止)(?=.*設備責任者)(?=.*再起動)(?=.*原因が特定)/,
   },
   {
     name: '始業前の確認項目',
