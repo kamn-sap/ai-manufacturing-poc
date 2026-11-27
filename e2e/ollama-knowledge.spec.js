@@ -17,7 +17,7 @@ const scenarios = [
     fileName: 'ollama-startup-work-instruction.md',
     fixturePath: '../fixtures/ollama-startup-work-instruction.md',
     section: '始業前確認',
-    question: '始業前に非常停止ボタンがどの状態であることを確認しますか？',
+    question: '始業前の確認で、解除されている必要があるものは何ですか？',
     expectedTerms: /非常停止|解除/,
   },
   {
